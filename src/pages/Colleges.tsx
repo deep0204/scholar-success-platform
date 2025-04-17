@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,9 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { ExternalLink, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getColleges, viewCollege } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Colleges = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     search: '',
     stream: '',
@@ -17,86 +21,39 @@ const Colleges = () => {
     budget: [0, 1000000],
     rating: 0,
   });
+  const [colleges, setColleges] = useState([]);
+  const [streams, setStreams] = useState([]);
+  const [states, setStates] = useState([]);
 
-  // Mock colleges data - would come from Supabase in a real app
-  const [colleges, setColleges] = useState([
-    {
-      id: 1,
-      name: 'Indian Institute of Technology, Delhi',
-      location: 'New Delhi',
-      stream: 'Engineering',
-      budget_range: '₹200,000 - ₹500,000',
-      budget_value: 350000,
-      image_url: '/placeholder.svg',
-      rating: 4.8,
-      state: 'Delhi',
-      apply_link: 'https://home.iitd.ac.in/'
-    },
-    {
-      id: 2,
-      name: 'Lady Shri Ram College for Women',
-      location: 'New Delhi',
-      stream: 'Arts',
-      budget_range: '₹80,000 - ₹150,000',
-      budget_value: 115000,
-      image_url: '/placeholder.svg',
-      rating: 4.6,
-      state: 'Delhi',
-      apply_link: 'https://lsr.edu.in/'
-    },
-    {
-      id: 3,
-      name: 'St. Stephen\'s College',
-      location: 'New Delhi',
-      stream: 'Arts',
-      budget_range: '₹70,000 - ₹130,000',
-      budget_value: 100000,
-      image_url: '/placeholder.svg',
-      rating: 4.7,
-      state: 'Delhi',
-      apply_link: 'https://www.ststephens.edu/'
-    },
-    {
-      id: 4,
-      name: 'BITS Pilani',
-      location: 'Pilani',
-      stream: 'Engineering',
-      budget_range: '₹250,000 - ₹500,000',
-      budget_value: 375000,
-      image_url: '/placeholder.svg',
-      rating: 4.7,
-      state: 'Rajasthan',
-      apply_link: 'https://www.bits-pilani.ac.in/'
-    },
-    {
-      id: 5,
-      name: 'Indian Institute of Management, Ahmedabad',
-      location: 'Ahmedabad',
-      stream: 'Management',
-      budget_range: '₹500,000 - ₹1,000,000',
-      budget_value: 750000,
-      image_url: '/placeholder.svg',
-      rating: 4.9,
-      state: 'Gujarat',
-      apply_link: 'https://www.iima.ac.in/'
-    },
-    {
-      id: 6,
-      name: 'AIIMS Delhi',
-      location: 'New Delhi',
-      stream: 'Medical',
-      budget_range: '₹100,000 - ₹300,000',
-      budget_value: 200000,
-      image_url: '/placeholder.svg',
-      rating: 4.8,
-      state: 'Delhi',
-      apply_link: 'https://www.aiims.edu/'
-    }
-  ]);
-
-  // Get unique streams and states for filter
-  const streams = Array.from(new Set(colleges.map(college => college.stream)));
-  const states = Array.from(new Set(colleges.map(college => college.state)));
+  useEffect(() => {
+    const fetchColleges = async () => {
+      try {
+        const { colleges: data, error } = await getColleges();
+        if (error) throw error;
+        
+        setColleges(data || []);
+        
+        // Extract unique streams and states
+        if (data && data.length > 0) {
+          const uniqueStreams = Array.from(new Set(data.map(college => college.stream)));
+          const uniqueStates = Array.from(new Set(data.map(college => college.state)));
+          setStreams(uniqueStreams);
+          setStates(uniqueStates);
+        }
+      } catch (error) {
+        console.error("Error fetching colleges:", error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch colleges. Please try again later.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchColleges();
+  }, [toast]);
   
   // Format budget values
   const formatBudget = (value: number) => {
@@ -128,13 +85,23 @@ const Colleges = () => {
     });
   };
 
-  // Handle adding college to recently viewed
-  const handleViewCollege = (collegeId: number) => {
-    // In a real app, this would update the user's recently viewed colleges in the database
-    toast({
-      description: "College added to your recently viewed list",
-    });
+  // Handle viewing college details
+  const handleViewCollege = async (collegeId: number) => {
+    if (!user?.id) return;
+    
+    try {
+      await viewCollege(user.id, collegeId);
+      toast({
+        description: "College added to your recently viewed list",
+      });
+    } catch (error) {
+      console.error("Error updating recently viewed colleges:", error);
+    }
   };
+
+  if (loading) {
+    return <div className="p-4">Loading colleges...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -245,7 +212,7 @@ const Colleges = () => {
             >
               <div className="h-48 bg-muted">
                 <img 
-                  src={college.image_url} 
+                  src={college.image_url || '/placeholder.svg'} 
                   alt={college.name} 
                   className="w-full h-full object-cover"
                 />

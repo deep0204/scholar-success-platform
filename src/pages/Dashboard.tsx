@@ -1,52 +1,67 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { CalendarIcon, GraduationCap, BarChart3, Award, Bell } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { getUserMissions, updateMissionStatus, getUserSessions, getRecentlyViewedColleges } from '@/lib/supabase';
 
 const Dashboard = () => {
   const { toast } = useToast();
-  // Mock user data - in reality this would come from Supabase
-  const [user, setUser] = useState({
-    name: 'Ananya Sharma',
-    xp: 75,
-    level: 1,
-    levelProgress: 75,
-    nextLevelXp: 100,
-    badges: [
-      { id: 1, name: 'Profile Champ', awarded: true },
-      { id: 2, name: 'College Explorer', awarded: false },
-      { id: 3, name: 'Mentor Mentee', awarded: false },
-      { id: 4, name: 'Career Curious', awarded: false },
-    ],
-    upcomingSessions: [
-      { 
-        id: 1, 
-        mentorName: 'Dr. Rajesh Kumar', 
-        date: '2025-04-24T14:00:00', 
-        status: 'confirmed',
-        topic: 'Engineering Career Paths'
+  const { user, profile } = useAuth();
+  const [loading, setLoading] = useState(true);
+  
+  const [weeklyMissions, setWeeklyMissions] = useState([]);
+  const [upcomingSessions, setUpcomingSessions] = useState([]);
+  const [recentColleges, setRecentColleges] = useState([]);
+  const [notifications, setNotifications] = useState([
+    { id: 1, text: 'New scholarship available for Science students', time: '2 hours ago' },
+    { id: 2, text: 'Your mentor session is confirmed', time: '1 day ago' },
+    { id: 3, text: 'You earned the Profile Champ badge!', time: '2 days ago' },
+  ]);
+  
+  const [badges, setBadges] = useState([
+    { id: 1, name: 'Profile Champ', awarded: true },
+    { id: 2, name: 'College Explorer', awarded: false },
+    { id: 3, name: 'Mentor Mentee', awarded: false },
+    { id: 4, name: 'Career Curious', awarded: false },
+  ]);
+  
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (user?.id) {
+        try {
+          // Fetch weekly missions
+          const { missions, error: missionsError } = await getUserMissions(user.id);
+          if (!missionsError && missions) {
+            setWeeklyMissions(missions);
+          }
+          
+          // Fetch upcoming sessions
+          const { sessions, error: sessionsError } = await getUserSessions(user.id);
+          if (!sessionsError && sessions) {
+            setUpcomingSessions(sessions);
+          }
+          
+          // Fetch recently viewed colleges
+          const { recentColleges: colleges, error: collegesError } = await getRecentlyViewedColleges(user.id);
+          if (!collegesError && colleges) {
+            setRecentColleges(colleges);
+          }
+          
+        } catch (error) {
+          console.error("Error fetching dashboard data:", error);
+        } finally {
+          setLoading(false);
+        }
       }
-    ],
-    weeklyMissions: [
-      { id: 1, text: 'Explore 3 colleges', completed: true, xp: 15 },
-      { id: 2, text: 'Book a mentor session', completed: false, xp: 20 },
-      { id: 3, text: 'Watch 2 career videos', completed: false, xp: 10 },
-      { id: 4, text: 'Ask the Career Coach 3 questions', completed: false, xp: 15 },
-    ],
-    recentColleges: [
-      { id: 1, name: 'IIT Delhi', stream: 'Engineering', image: '/placeholder.svg' },
-      { id: 2, name: 'Lady Shri Ram College', stream: 'Arts', image: '/placeholder.svg' },
-    ],
-    notifications: [
-      { id: 1, text: 'New scholarship available for Science students', time: '2 hours ago' },
-      { id: 2, text: 'Your mentor session is confirmed', time: '1 day ago' },
-      { id: 3, text: 'You earned the Profile Champ badge!', time: '2 days ago' },
-    ]
-  });
+    };
+    
+    fetchDashboardData();
+  }, [user?.id]);
   
   // Format date function
   const formatDate = (dateString: string) => {
@@ -61,58 +76,73 @@ const Dashboard = () => {
   };
 
   // Handle checkbox change for weekly missions
-  const handleMissionComplete = (missionId: number) => {
-    const updatedUser = {...user};
-    const missionIndex = updatedUser.weeklyMissions.findIndex(mission => mission.id === missionId);
+  const handleMissionComplete = async (missionId: number, completed: boolean) => {
+    if (!user?.id) return;
     
-    if (missionIndex !== -1) {
-      // Toggle the completed status
-      const newCompletedStatus = !updatedUser.weeklyMissions[missionIndex].completed;
-      updatedUser.weeklyMissions[missionIndex].completed = newCompletedStatus;
+    try {
+      const { error, xpChange, xpResult } = await updateMissionStatus(missionId, user.id, completed);
       
-      // If completed, award XP
-      if (newCompletedStatus) {
-        const xpGained = updatedUser.weeklyMissions[missionIndex].xp;
-        updatedUser.xp += xpGained;
-        
-        // Check if level up occurred
-        if (updatedUser.xp >= updatedUser.nextLevelXp) {
-          updatedUser.level += 1;
-          updatedUser.nextLevelXp += 100; // Increase XP needed for next level
-          toast({
-            title: "Level Up!",
-            description: `Congratulations! You're now level ${updatedUser.level}!`,
-          });
-        }
-        
-        // Calculate new level progress
-        updatedUser.levelProgress = ((updatedUser.xp % 100) / 100) * 100;
-        
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      // Update the local missions state
+      setWeeklyMissions(prev => 
+        prev.map(mission => 
+          mission.id === missionId 
+            ? { ...mission, status: completed ? 'completed' : 'pending', completed_on: completed ? new Date().toISOString() : null } 
+            : mission
+        )
+      );
+      
+      // Show toast notification
+      if (completed) {
         toast({
           title: "Mission Completed!",
-          description: `You earned ${xpGained} XP!`,
+          description: `You earned ${xpChange} XP!`,
         });
-      } else {
-        // If uncompleted, remove XP
-        const xpLost = updatedUser.weeklyMissions[missionIndex].xp;
-        updatedUser.xp = Math.max(0, updatedUser.xp - xpLost);
-        updatedUser.levelProgress = ((updatedUser.xp % 100) / 100) * 100;
         
+        // Show level up notification if applicable
+        if (xpResult.levelUp) {
+          toast({
+            title: "Level Up!",
+            description: `Congratulations! You're now level ${xpResult.newLevel}!`,
+          });
+        }
+      } else {
         toast({
           title: "Mission Uncompleted",
-          description: `You lost ${xpLost} XP.`,
+          description: `You lost ${Math.abs(xpChange)} XP.`,
         });
       }
       
-      setUser(updatedUser);
+    } catch (error) {
+      console.error("Error updating mission:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update mission status. Please try again.",
+        variant: "destructive",
+      });
     }
   };
+
+  // Calculate level progress
+  const calculateLevelProgress = () => {
+    if (!profile) return 0;
+    
+    const xpInCurrentLevel = profile.xp % 100;
+    return (xpInCurrentLevel / 100) * 100;
+  };
+
+  if (loading) {
+    return <div className="p-4">Loading dashboard data...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {user.name}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {profile?.full_name}</h1>
           <p className="text-muted-foreground">Here's an overview of your progress and activities.</p>
         </div>
       </div>
@@ -125,9 +155,9 @@ const Dashboard = () => {
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{user.xp} XP</div>
-            <p className="text-xs text-muted-foreground">{user.nextLevelXp - user.xp} XP until next level</p>
-            <Progress value={user.levelProgress} className="h-2 mt-3" />
+            <div className="text-2xl font-bold">{profile?.xp || 0} XP</div>
+            <p className="text-xs text-muted-foreground">{100 - (profile?.xp % 100)} XP until next level</p>
+            <Progress value={calculateLevelProgress()} className="h-2 mt-3" />
           </CardContent>
         </Card>
         
@@ -137,7 +167,7 @@ const Dashboard = () => {
             <Award className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">Level {user.level}</div>
+            <div className="text-2xl font-bold">Level {profile?.level || 1}</div>
             <p className="text-xs text-muted-foreground">Keep going to unlock more features!</p>
           </CardContent>
         </Card>
@@ -148,7 +178,7 @@ const Dashboard = () => {
             <GraduationCap className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{user.recentColleges.length}</div>
+            <div className="text-2xl font-bold">{recentColleges.length}</div>
             <p className="text-xs text-muted-foreground">Explore more to earn badges</p>
           </CardContent>
         </Card>
@@ -159,8 +189,12 @@ const Dashboard = () => {
             <CalendarIcon className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{user.upcomingSessions.length}</div>
-            <p className="text-xs text-muted-foreground">Next session on {user.upcomingSessions.length ? formatDate(user.upcomingSessions[0].date).split(',')[0] : 'N/A'}</p>
+            <div className="text-2xl font-bold">{upcomingSessions.length}</div>
+            <p className="text-xs text-muted-foreground">
+              {upcomingSessions.length > 0 
+                ? `Next session on ${formatDate(upcomingSessions[0].scheduled_date).split(',')[0]}` 
+                : 'No upcoming sessions'}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -173,7 +207,7 @@ const Dashboard = () => {
             <CardDescription>Showcase your progress and accomplishments</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {user.badges.map((badge) => (
+            {badges.map((badge) => (
               <div key={badge.id} className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center 
                   ${badge.awarded ? 'bg-campus-blue text-white' : 'bg-muted text-muted-foreground'}`}>
@@ -200,30 +234,34 @@ const Dashboard = () => {
             <CardDescription>Complete missions to earn XP</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {user.weeklyMissions.map((mission) => (
-              <div key={mission.id} className="flex items-center space-x-2">
-                <Checkbox
-                  id={`mission-${mission.id}`}
-                  checked={mission.completed}
-                  onCheckedChange={() => handleMissionComplete(mission.id)}
-                  className="h-4 w-4 rounded border-gray-300 text-campus-blue focus:ring-campus-blue"
-                />
-                <div className="flex-1">
-                  <label 
-                    htmlFor={`mission-${mission.id}`}
-                    className="text-sm cursor-pointer"
-                  >
-                    {mission.text}
-                  </label>
-                  <div className="text-xs text-muted-foreground">Reward: {mission.xp} XP</div>
+            {weeklyMissions.length > 0 ? (
+              weeklyMissions.map((mission) => (
+                <div key={mission.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`mission-${mission.id}`}
+                    checked={mission.status === 'completed'}
+                    onCheckedChange={(checked) => handleMissionComplete(mission.id, checked === true)}
+                    className="h-4 w-4 rounded border-gray-300 text-campus-blue focus:ring-campus-blue"
+                  />
+                  <div className="flex-1">
+                    <label 
+                      htmlFor={`mission-${mission.id}`}
+                      className="text-sm cursor-pointer"
+                    >
+                      {mission.mission_text}
+                    </label>
+                    <div className="text-xs text-muted-foreground">Reward: {mission.xp} XP</div>
+                  </div>
+                  {mission.status === 'completed' && (
+                    <Badge variant="outline" className="bg-campus-success/10 text-campus-success border-campus-success">
+                      Complete
+                    </Badge>
+                  )}
                 </div>
-                {mission.completed && (
-                  <Badge variant="outline" className="bg-campus-success/10 text-campus-success border-campus-success">
-                    Complete
-                  </Badge>
-                )}
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No missions available this week.</p>
+            )}
           </CardContent>
         </Card>
         
@@ -237,7 +275,7 @@ const Dashboard = () => {
             <Bell className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent className="space-y-4">
-            {user.notifications.map((notification) => (
+            {notifications.map((notification) => (
               <div key={notification.id} className="border-b pb-3 last:border-none last:pb-0">
                 <p className="text-sm">{notification.text}</p>
                 <span className="text-xs text-muted-foreground">{notification.time}</span>
@@ -248,23 +286,23 @@ const Dashboard = () => {
       </div>
       
       {/* Upcoming Sessions */}
-      {user.upcomingSessions.length > 0 && (
+      {upcomingSessions.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Upcoming Mentor Sessions</CardTitle>
             <CardDescription>Your scheduled sessions with mentors</CardDescription>
           </CardHeader>
           <CardContent>
-            {user.upcomingSessions.map((session) => (
+            {upcomingSessions.map((session) => (
               <div key={session.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border rounded-md">
                 <div>
-                  <h4 className="font-medium">{session.topic}</h4>
-                  <p className="text-sm text-muted-foreground">with {session.mentorName}</p>
+                  <h4 className="font-medium">{session.mentors.specialization}</h4>
+                  <p className="text-sm text-muted-foreground">with {session.mentors.name}</p>
                 </div>
                 <div className="flex flex-col md:flex-row gap-2 md:items-center">
                   <div className="text-sm flex items-center gap-1">
                     <CalendarIcon className="h-4 w-4 text-campus-blue" />
-                    <span>{formatDate(session.date)}</span>
+                    <span>{formatDate(session.scheduled_date)}</span>
                   </div>
                   <Badge className="md:ml-2 w-fit bg-campus-success">{session.status}</Badge>
                 </div>
@@ -275,7 +313,7 @@ const Dashboard = () => {
       )}
       
       {/* Recent Colleges */}
-      {user.recentColleges.length > 0 && (
+      {recentColleges.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Recently Viewed Colleges</CardTitle>
@@ -283,18 +321,18 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {user.recentColleges.map((college) => (
-                <div key={college.id} className="flex gap-3 items-center">
+              {recentColleges.map((item) => (
+                <div key={item.id} className="flex gap-3 items-center">
                   <div className="w-16 h-16 rounded-md overflow-hidden bg-muted">
                     <img 
-                      src={college.image} 
-                      alt={college.name}
+                      src={item.colleges.image_url || '/placeholder.svg'} 
+                      alt={item.colleges.name}
                       className="w-full h-full object-cover"
                     />
                   </div>
                   <div>
-                    <h4 className="font-medium">{college.name}</h4>
-                    <p className="text-sm text-muted-foreground">{college.stream}</p>
+                    <h4 className="font-medium">{item.colleges.name}</h4>
+                    <p className="text-sm text-muted-foreground">{item.colleges.stream}</p>
                   </div>
                 </div>
               ))}

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -12,10 +12,15 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { getMentors, bookMentorSession } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Mentors = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [date, setDate] = useState<Date | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
+  const [mentors, setMentors] = useState([]);
   const [selectedMentor, setSelectedMentor] = useState<null | {
     id: number;
     name: string;
@@ -23,57 +28,27 @@ const Mentors = () => {
     specialization: string;
   }>(null);
   
-  // Mock mentors data - would come from Supabase in a real app
-  const mentors = [
-    {
-      id: 1,
-      name: 'Dr. Rajesh Kumar',
-      college: 'IIT Delhi',
-      specialization: 'Computer Science',
-      profile_image: '',
-      available_dates: ['2025-04-20', '2025-04-22', '2025-04-24', '2025-04-26'],
-      contact_info: 'rajesh.kumar@example.com',
-      bio: 'Dr. Kumar has over 15 years of experience in the field of Computer Science. He specializes in AI and Machine Learning and has guided numerous students in their academic and career paths.',
-      rating: 4.8,
-      sessions_completed: 42
-    },
-    {
-      id: 2,
-      name: 'Prof. Anita Desai',
-      college: 'Delhi University',
-      specialization: 'Literature & Arts',
-      profile_image: '',
-      available_dates: ['2025-04-21', '2025-04-23', '2025-04-25', '2025-04-27'],
-      contact_info: 'anita.desai@example.com',
-      bio: 'Prof. Desai is a renowned literary expert with publications in several international journals. She guides students interested in pursuing humanities and literature.',
-      rating: 4.7,
-      sessions_completed: 38
-    },
-    {
-      id: 3,
-      name: 'Dr. Sunita Sharma',
-      college: 'AIIMS Delhi',
-      specialization: 'Medical Sciences',
-      profile_image: '',
-      available_dates: ['2025-04-19', '2025-04-21', '2025-04-23', '2025-04-25'],
-      contact_info: 'sunita.sharma@example.com',
-      bio: 'Dr. Sharma is a medical professional specializing in guiding students for medical entrance exams and career options in various medical fields.',
-      rating: 4.9,
-      sessions_completed: 56
-    },
-    {
-      id: 4,
-      name: 'Prof. Vikram Malhotra',
-      college: 'IIM Ahmedabad',
-      specialization: 'Business Management',
-      profile_image: '',
-      available_dates: ['2025-04-20', '2025-04-22', '2025-04-24', '2025-04-26'],
-      contact_info: 'vikram.malhotra@example.com',
-      bio: 'Prof. Malhotra is a management guru with extensive experience in corporate strategy. He guides students interested in business management and entrepreneurship.',
-      rating: 4.8,
-      sessions_completed: 47
-    }
-  ];
+  useEffect(() => {
+    const fetchMentors = async () => {
+      try {
+        const { mentors: data, error } = await getMentors();
+        if (error) throw error;
+        
+        setMentors(data || []);
+      } catch (error) {
+        console.error("Error fetching mentors:", error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch mentors. Please try again later.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchMentors();
+  }, [toast]);
 
   // Get initials from name
   const getInitials = (name: string) => {
@@ -84,7 +59,7 @@ const Mentors = () => {
       .toUpperCase();
   };
 
-  const handleBookSession = (mentor: any) => {
+  const handleBookSession = async () => {
     if (!date) {
       toast({
         title: "Please select a date",
@@ -93,17 +68,43 @@ const Mentors = () => {
       });
       return;
     }
+    
+    if (!user?.id || !selectedMentor) {
+      toast({
+        title: "Error",
+        description: "Unable to book session. Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    // In a real app, this would save to Supabase
-    toast({
-      title: "Session Booked!",
-      description: `Your session with ${mentor.name} is scheduled for ${format(date, 'PPP')}`,
-    });
+    try {
+      const formattedDate = date.toISOString();
+      const { error } = await bookMentorSession(user.id, selectedMentor.id, formattedDate);
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Session Booked!",
+        description: `Your session with ${selectedMentor.name} is scheduled for ${format(date, 'PPP')}`,
+      });
 
-    // Reset form
-    setDate(undefined);
-    setSelectedMentor(null);
+      // Reset form
+      setDate(undefined);
+      setSelectedMentor(null);
+    } catch (error) {
+      console.error("Error booking session:", error);
+      toast({
+        title: "Booking Failed",
+        description: "There was an error booking your session. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
+
+  if (loading) {
+    return <div className="p-4">Loading mentors...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -185,21 +186,28 @@ const Mentors = () => {
                             {date ? format(date, "PPP") : "Pick a date"}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
+                        <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
                             selected={date}
                             onSelect={setDate}
                             initialFocus
-                            disabled={(date) => 
-                              date < new Date() || 
-                              date > new Date(2025, 5, 30)
-                            }
+                            disabled={(currentDate) => {
+                              // Disable dates in the past
+                              const today = new Date();
+                              today.setHours(0, 0, 0, 0);
+                              
+                              // Also disable dates more than 30 days in the future
+                              const thirtyDaysFromNow = new Date();
+                              thirtyDaysFromNow.setDate(today.getDate() + 30);
+                              
+                              return currentDate < today || currentDate > thirtyDaysFromNow;
+                            }}
                           />
                         </PopoverContent>
                       </Popover>
                       <p className="text-xs text-muted-foreground">
-                        Available dates: Next 2 weeks, excluding weekends
+                        Available dates: Next 30 days
                       </p>
                     </div>
                   </div>
@@ -207,7 +215,7 @@ const Mentors = () => {
                     <Button 
                       type="submit" 
                       className="bg-campus-blue hover:bg-campus-blue/90"
-                      onClick={() => handleBookSession(selectedMentor)}
+                      onClick={handleBookSession}
                     >
                       Confirm Booking
                     </Button>

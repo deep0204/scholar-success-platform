@@ -1,13 +1,16 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { CalendarIcon, GraduationCap, BarChart3, Award, Bell } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useToast } from '@/hooks/use-toast';
 
 const Dashboard = () => {
+  const { toast } = useToast();
   // Mock user data - in reality this would come from Supabase
-  const user = {
+  const [user, setUser] = useState({
     name: 'Ananya Sharma',
     xp: 75,
     level: 1,
@@ -43,7 +46,7 @@ const Dashboard = () => {
       { id: 2, text: 'Your mentor session is confirmed', time: '1 day ago' },
       { id: 3, text: 'You earned the Profile Champ badge!', time: '2 days ago' },
     ]
-  };
+  });
   
   // Format date function
   const formatDate = (dateString: string) => {
@@ -55,6 +58,54 @@ const Dashboard = () => {
       hour: 'numeric',
       minute: '2-digit'
     });
+  };
+
+  // Handle checkbox change for weekly missions
+  const handleMissionComplete = (missionId: number) => {
+    const updatedUser = {...user};
+    const missionIndex = updatedUser.weeklyMissions.findIndex(mission => mission.id === missionId);
+    
+    if (missionIndex !== -1) {
+      // Toggle the completed status
+      const newCompletedStatus = !updatedUser.weeklyMissions[missionIndex].completed;
+      updatedUser.weeklyMissions[missionIndex].completed = newCompletedStatus;
+      
+      // If completed, award XP
+      if (newCompletedStatus) {
+        const xpGained = updatedUser.weeklyMissions[missionIndex].xp;
+        updatedUser.xp += xpGained;
+        
+        // Check if level up occurred
+        if (updatedUser.xp >= updatedUser.nextLevelXp) {
+          updatedUser.level += 1;
+          updatedUser.nextLevelXp += 100; // Increase XP needed for next level
+          toast({
+            title: "Level Up!",
+            description: `Congratulations! You're now level ${updatedUser.level}!`,
+          });
+        }
+        
+        // Calculate new level progress
+        updatedUser.levelProgress = ((updatedUser.xp % 100) / 100) * 100;
+        
+        toast({
+          title: "Mission Completed!",
+          description: `You earned ${xpGained} XP!`,
+        });
+      } else {
+        // If uncompleted, remove XP
+        const xpLost = updatedUser.weeklyMissions[missionIndex].xp;
+        updatedUser.xp = Math.max(0, updatedUser.xp - xpLost);
+        updatedUser.levelProgress = ((updatedUser.xp % 100) / 100) * 100;
+        
+        toast({
+          title: "Mission Uncompleted",
+          description: `You lost ${xpLost} XP.`,
+        });
+      }
+      
+      setUser(updatedUser);
+    }
   };
 
   return (
@@ -151,14 +202,19 @@ const Dashboard = () => {
           <CardContent className="space-y-4">
             {user.weeklyMissions.map((mission) => (
               <div key={mission.id} className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
+                <Checkbox
+                  id={`mission-${mission.id}`}
                   checked={mission.completed}
+                  onCheckedChange={() => handleMissionComplete(mission.id)}
                   className="h-4 w-4 rounded border-gray-300 text-campus-blue focus:ring-campus-blue"
-                  readOnly
                 />
                 <div className="flex-1">
-                  <div className="text-sm">{mission.text}</div>
+                  <label 
+                    htmlFor={`mission-${mission.id}`}
+                    className="text-sm cursor-pointer"
+                  >
+                    {mission.text}
+                  </label>
                   <div className="text-xs text-muted-foreground">Reward: {mission.xp} XP</div>
                 </div>
                 {mission.completed && (

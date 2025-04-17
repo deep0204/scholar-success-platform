@@ -1,9 +1,9 @@
-
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { GraduationCap, Users, Video, MessageSquare, Award, LogIn, UserPlus } from 'lucide-react';
+import Trophy from '@/components/ui/trophy';
 
 const Index = () => {
   const navigate = useNavigate();

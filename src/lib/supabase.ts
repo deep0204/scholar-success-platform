@@ -1,12 +1,94 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from "@/integrations/supabase/client";
+
+// Update getScholarships function to use new table
+export const getScholarships = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('scholarships')
+      .select('*')
+      .order('last_date', { ascending: true });
+    
+    if (error) throw error;
+    
+    return { scholarships: data || [], error: null };
+  } catch (err) {
+    console.error("Error fetching scholarships:", err);
+    return { scholarships: [], error: err };
+  }
+};
+
+// Update getUserMissions to use new user_missions table
+export const getUserMissions = async (userId: string) => {
+  try {
+    // First check if the user has any missions assigned
+    const { data: existingMissions, error: checkError } = await supabase
+      .from('user_missions')
+      .select('*')
+      .eq('user_id', userId);
+    
+    if (checkError) {
+      console.error("Error checking user missions:", checkError.message);
+      throw checkError;
+    }
+    
+    // If no user missions, create default missions from missions table
+    if (!existingMissions || existingMissions.length === 0) {
+      const { data: defaultMissions, error: defaultError } = await supabase
+        .from('missions')
+        .select('*')
+        .eq('is_default', true);
+      
+      if (defaultError) {
+        console.error("Error fetching default missions:", defaultError.message);
+        throw defaultError;
+      }
+      
+      // Create user missions from default missions if they exist
+      if (defaultMissions && defaultMissions.length > 0) {
+        const userMissionsToInsert = defaultMissions.map(mission => ({
+          user_id: userId,
+          mission_text: mission.mission_text,
+          xp: mission.xp,
+          status: 'pending',
+          mission_type: mission.mission_type,
+        }));
+        
+        const { error: insertError } = await supabase
+          .from('user_missions')
+          .insert(userMissionsToInsert);
+        
+        if (insertError) {
+          console.error("Error creating user missions:", insertError.message);
+          throw insertError;
+        }
+        
+        // Fetch the newly created missions
+        const { data: newMissions, error: fetchError } = await supabase
+          .from('user_missions')
+          .select('*')
+          .eq('user_id', userId);
+        
+        if (fetchError) {
+          console.error("Error fetching new missions:", fetchError.message);
+          throw fetchError;
+        }
+        
+        return { missions: newMissions || [], error: null };
+      }
+    }
+    
+    // Return existing missions
+    return { missions: existingMissions || [], error: null };
+  } catch (err) {
+    console.error("Exception in getUserMissions:", err);
+    return { missions: [], error: err };
+  }
+};
 
 // Use the direct URLs instead of environment variables
 const supabaseUrl = "https://ouypqcymrckqhqpnjhqq.supabase.co";
 const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91eXBxY3ltcmNrcWhxcG5qaHFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ5MTkyMzMsImV4cCI6MjA2MDQ5NTIzM30.mpjet2eZIIJyVImEbAE1yVcpNFyQ3YCU7OK8FdbBNKI";
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// Helper functions for authentication
 export const signIn = async (email: string, password: string) => {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
@@ -198,75 +280,6 @@ export const getUserSessions = async (userId: string) => {
   } catch (err) {
     console.error("Exception in getUserSessions:", err);
     return { sessions: [], error: err };
-  }
-};
-
-// Weekly missions related functions - improved for better error handling
-export const getUserMissions = async (userId: string) => {
-  try {
-    // First check if the user has any missions assigned
-    const { data: existingMissions, error: checkError } = await supabase
-      .from('user_missions')
-      .select('*')
-      .eq('user_id', userId);
-    
-    if (checkError) {
-      console.error("Error checking user missions:", checkError.message);
-      throw checkError;
-    }
-    
-    // If the user doesn't have any missions assigned, create default missions
-    if (!existingMissions || existingMissions.length === 0) {
-      // Get default missions from the missions table
-      const { data: defaultMissions, error: defaultError } = await supabase
-        .from('missions')
-        .select('*')
-        .eq('is_default', true);
-      
-      if (defaultError) {
-        console.error("Error fetching default missions:", defaultError.message);
-        throw defaultError;
-      }
-      
-      // Create user missions from default missions
-      if (defaultMissions && defaultMissions.length > 0) {
-        const userMissionsToInsert = defaultMissions.map(mission => ({
-          user_id: userId,
-          mission_text: mission.mission_text,
-          xp: mission.xp,
-          status: 'pending',
-          mission_type: mission.mission_type,
-        }));
-        
-        const { error: insertError } = await supabase
-          .from('user_missions')
-          .insert(userMissionsToInsert);
-        
-        if (insertError) {
-          console.error("Error creating user missions:", insertError.message);
-          throw insertError;
-        }
-        
-        // Fetch the newly created missions
-        const { data: newMissions, error: fetchError } = await supabase
-          .from('user_missions')
-          .select('*')
-          .eq('user_id', userId);
-        
-        if (fetchError) {
-          console.error("Error fetching new missions:", fetchError.message);
-          throw fetchError;
-        }
-        
-        return { missions: newMissions || [], error: null };
-      }
-    }
-    
-    // Return existing missions
-    return { missions: existingMissions || [], error: null };
-  } catch (err) {
-    console.error("Exception in getUserMissions:", err);
-    return { missions: [], error: err };
   }
 };
 
@@ -590,25 +603,5 @@ export const getRecentlyViewedColleges = async (userId: string) => {
   } catch (err) {
     console.error("Exception in getRecentlyViewedColleges:", err);
     return { recentColleges: [], error: err };
-  }
-};
-
-// Adding the missing getScholarships function
-export const getScholarships = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('scholarships')
-      .select('*')
-      .order('last_date', { ascending: true });
-    
-    if (error) {
-      console.error("Error fetching scholarships:", error.message);
-      throw error;
-    }
-    
-    return { scholarships: data || [], error: null };
-  } catch (err) {
-    console.error("Exception in getScholarships:", err);
-    return { scholarships: [], error: err };
   }
 };

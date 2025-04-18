@@ -2,10 +2,11 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { getCurrentUser, getUserProfile, signIn, signOut } from '@/lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import { User as SupabaseUser } from '@supabase/supabase-js';
 
 type User = {
   id: string;
-  email: string;
+  email?: string; // Making email optional to match Supabase User type
   full_name?: string;
   gender?: string;
   age?: number;
@@ -47,7 +48,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         const { user: currentUser, error } = await getCurrentUser();
         
         if (currentUser) {
-          setUser(currentUser);
+          setUser(currentUser as User);
           
           // Fetch user profile
           const { profile: userProfile } = await getUserProfile(currentUser.id);
@@ -72,7 +73,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       }
       
       if (data.user) {
-        setUser(data.user);
+        setUser(data.user as User);
         
         // Fetch user profile
         const { profile: userProfile } = await getUserProfile(data.user.id);

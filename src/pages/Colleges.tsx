@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { ExternalLink, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getColleges, viewCollege } from '@/lib/supabase';
+import { getColleges, viewCollege, createSampleData } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
 const Colleges = () => {
@@ -28,8 +28,15 @@ const Colleges = () => {
   useEffect(() => {
     const fetchColleges = async () => {
       try {
+        // First ensure we have sample data
+        await createSampleData();
+        
+        // Then fetch colleges
         const { colleges: data, error } = await getColleges();
-        if (error) throw error;
+        
+        if (error) {
+          throw error;
+        }
         
         setColleges(data || []);
         
@@ -101,6 +108,35 @@ const Colleges = () => {
 
   if (loading) {
     return <div className="p-4">Loading colleges...</div>;
+  }
+
+  // If no colleges found after loading
+  if (colleges.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">College Explorer</h1>
+          <p className="text-muted-foreground">Find the perfect college for your future</p>
+        </div>
+        <Card className="text-center p-8">
+          <CardContent className="pt-6">
+            <p className="mb-4">No colleges available at the moment. Please check back later.</p>
+            <Button 
+              onClick={async () => {
+                setLoading(true);
+                await createSampleData();
+                const { colleges: refreshedColleges } = await getColleges();
+                setColleges(refreshedColleges || []);
+                setLoading(false);
+              }}
+              className="bg-campus-blue hover:bg-campus-blue/90"
+            >
+              Refresh Colleges
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (

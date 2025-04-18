@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { getMentors, bookMentorSession } from '@/lib/supabase';
+import { getMentors, bookMentorSession, createSampleData } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
 const Mentors = () => {
@@ -31,8 +31,15 @@ const Mentors = () => {
   useEffect(() => {
     const fetchMentors = async () => {
       try {
+        // First ensure we have sample data
+        await createSampleData();
+        
+        // Then fetch mentors
         const { mentors: data, error } = await getMentors();
-        if (error) throw error;
+        
+        if (error) {
+          throw error;
+        }
         
         setMentors(data || []);
       } catch (error) {
@@ -104,6 +111,35 @@ const Mentors = () => {
 
   if (loading) {
     return <div className="p-4">Loading mentors...</div>;
+  }
+
+  // If no mentors found after loading
+  if (mentors.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Mentor Connect</h1>
+          <p className="text-muted-foreground">Book sessions with experienced mentors from top institutions</p>
+        </div>
+        <Card className="text-center p-8">
+          <CardContent className="pt-6">
+            <p className="mb-4">No mentors available at the moment. Please check back later.</p>
+            <Button 
+              onClick={async () => {
+                setLoading(true);
+                await createSampleData();
+                const { mentors: refreshedMentors } = await getMentors();
+                setMentors(refreshedMentors || []);
+                setLoading(false);
+              }}
+              className="bg-campus-blue hover:bg-campus-blue/90"
+            >
+              Refresh Mentors
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -186,12 +222,13 @@ const Mentors = () => {
                             {date ? format(date, "PPP") : "Pick a date"}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
+                        <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
                           <Calendar
                             mode="single"
                             selected={date}
                             onSelect={setDate}
                             initialFocus
+                            className="pointer-events-auto"
                             disabled={(currentDate) => {
                               // Disable dates in the past
                               const today = new Date();

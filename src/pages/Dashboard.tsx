@@ -102,10 +102,10 @@ const Dashboard = () => {
         });
         
         // Show level up notification if applicable
-        if (xpResult && xpResult.levelUp) {
+        if (xpResult?.levelUp) {
           toast({
             title: "Level Up!",
-            description: `Congratulations! You're now level ${xpResult.newLevel || 1}!`,
+            description: `Congratulations! You're now level ${xpResult?.newLevel || 1}!`,
           });
         }
       } else {

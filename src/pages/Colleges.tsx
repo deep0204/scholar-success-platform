@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { ExternalLink, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getColleges, viewCollege, createSampleData } from '@/lib/supabase';
+import { getColleges, viewCollege } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
 const Colleges = () => {
@@ -24,18 +24,18 @@ const Colleges = () => {
   const [colleges, setColleges] = useState([]);
   const [streams, setStreams] = useState([]);
   const [states, setStates] = useState([]);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchColleges = async () => {
+      setLoading(true);
+      setError(null);
+      
       try {
-        // First ensure we have sample data
-        await createSampleData();
+        const { colleges: data, error: collegeError } = await getColleges();
         
-        // Then fetch colleges
-        const { colleges: data, error } = await getColleges();
-        
-        if (error) {
-          throw error;
+        if (collegeError) {
+          throw collegeError;
         }
         
         setColleges(data || []);
@@ -47,8 +47,9 @@ const Colleges = () => {
           setStreams(uniqueStreams);
           setStates(uniqueStates);
         }
-      } catch (error) {
-        console.error("Error fetching colleges:", error);
+      } catch (err) {
+        console.error("Error fetching colleges:", err);
+        setError("Failed to fetch colleges. Please try again later.");
         toast({
           title: "Error",
           description: "Failed to fetch colleges. Please try again later.",
@@ -63,7 +64,7 @@ const Colleges = () => {
   }, [toast]);
   
   // Format budget values
-  const formatBudget = (value: number) => {
+  const formatBudget = (value) => {
     if (value >= 100000) {
       return `₹${(value / 100000).toFixed(1)} Lakh`;
     }
@@ -85,7 +86,7 @@ const Colleges = () => {
   });
 
   // Handle applying to a college
-  const handleApplyClick = (collegeName: string) => {
+  const handleApplyClick = (collegeName) => {
     toast({
       title: "Application Link",
       description: `Opening application page for ${collegeName}`,
@@ -93,7 +94,7 @@ const Colleges = () => {
   };
 
   // Handle viewing college details
-  const handleViewCollege = async (collegeId: number) => {
+  const handleViewCollege = async (collegeId) => {
     if (!user?.id) return;
     
     try {
@@ -109,6 +110,28 @@ const Colleges = () => {
   if (loading) {
     return <div className="p-4">Loading colleges...</div>;
   }
+  
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">College Explorer</h1>
+          <p className="text-muted-foreground">Find the perfect college for your future</p>
+        </div>
+        <Card className="text-center p-8">
+          <CardContent className="pt-6">
+            <p className="mb-4 text-red-500">{error}</p>
+            <Button 
+              onClick={() => window.location.reload()}
+              className="bg-campus-blue hover:bg-campus-blue/90"
+            >
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // If no colleges found after loading
   if (colleges.length === 0) {
@@ -122,13 +145,7 @@ const Colleges = () => {
           <CardContent className="pt-6">
             <p className="mb-4">No colleges available at the moment. Please check back later.</p>
             <Button 
-              onClick={async () => {
-                setLoading(true);
-                await createSampleData();
-                const { colleges: refreshedColleges } = await getColleges();
-                setColleges(refreshedColleges || []);
-                setLoading(false);
-              }}
+              onClick={() => window.location.reload()}
               className="bg-campus-blue hover:bg-campus-blue/90"
             >
               Refresh Colleges
@@ -231,7 +248,8 @@ const Colleges = () => {
               min={0}
               max={1000000}
               step={50000}
-              onValueChange={(value) => setFilters({...filters, budget: value as [number, number]})}
+              value={filters.budget}
+              onValueChange={(value) => setFilters({...filters, budget: value})}
             />
           </div>
         </CardContent>
@@ -251,6 +269,9 @@ const Colleges = () => {
                   src={college.image_url || '/placeholder.svg'} 
                   alt={college.name} 
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.src = '/placeholder.svg';
+                  }}
                 />
               </div>
               <CardContent className="pt-6">

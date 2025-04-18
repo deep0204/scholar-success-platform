@@ -1,12 +1,14 @@
+
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { CalendarIcon, GraduationCap, BarChart3, Award, Bell } from 'lucide-react';
+import { CalendarIcon, GraduationCap, BarChart3, Award, Bell, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { getUserMissions, updateMissionStatus, getUserSessions, getRecentlyViewedColleges } from '@/lib/supabase';
+import { getUserMissions, updateMissionStatus, getUserSessions, getRecentlyViewedColleges, cancelMentorSession } from '@/lib/supabase';
 
 const Dashboard = () => {
   const { toast } = useToast();
@@ -63,7 +65,7 @@ const Dashboard = () => {
   }, [user?.id]);
   
   // Format date function
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleString('en-US', { 
       weekday: 'short',
@@ -75,14 +77,14 @@ const Dashboard = () => {
   };
 
   // Handle checkbox change for weekly missions
-  const handleMissionComplete = async (missionId: number, completed: boolean) => {
+  const handleMissionComplete = async (missionId, completed) => {
     if (!user?.id) return;
     
     try {
       const { error, xpChange, xpResult } = await updateMissionStatus(missionId, user.id, completed);
       
       if (error) {
-        throw new Error(error.message);
+        throw error;
       }
       
       // Update the local missions state
@@ -120,6 +122,36 @@ const Dashboard = () => {
       toast({
         title: "Error",
         description: "Failed to update mission status. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle cancellation of mentor session
+  const handleCancelSession = async (sessionId) => {
+    if (!user?.id) return;
+    
+    try {
+      const { error } = await cancelMentorSession(sessionId);
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Remove the session from the list
+      setUpcomingSessions(prev => prev.filter(session => session.id !== sessionId));
+      
+      // Show toast notification
+      toast({
+        title: "Session Cancelled",
+        description: "Your mentor session has been cancelled successfully.",
+      });
+      
+    } catch (error) {
+      console.error("Error cancelling session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to cancel session. Please try again.",
         variant: "destructive",
       });
     }
@@ -240,7 +272,6 @@ const Dashboard = () => {
                     id={`mission-${mission.id}`}
                     checked={mission.status === 'completed'}
                     onCheckedChange={(checked) => handleMissionComplete(mission.id, checked === true)}
-                    className="h-4 w-4 rounded border-gray-300 text-campus-blue focus:ring-campus-blue"
                   />
                   <div className="flex-1">
                     <label 
@@ -293,7 +324,7 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             {upcomingSessions.map((session) => (
-              <div key={session.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border rounded-md">
+              <div key={session.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border rounded-md mb-3 last:mb-0">
                 <div>
                   <h4 className="font-medium">{session.mentors.specialization}</h4>
                   <p className="text-sm text-muted-foreground">with {session.mentors.name}</p>
@@ -303,7 +334,18 @@ const Dashboard = () => {
                     <CalendarIcon className="h-4 w-4 text-campus-blue" />
                     <span>{formatDate(session.scheduled_date)}</span>
                   </div>
-                  <Badge className="md:ml-2 w-fit bg-campus-success">{session.status}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge className="md:ml-2 w-fit bg-campus-success">{session.status}</Badge>
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-100"
+                      onClick={() => handleCancelSession(session.id)}
+                      title="Cancel session"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}

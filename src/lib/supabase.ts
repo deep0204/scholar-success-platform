@@ -1,7 +1,9 @@
+
 import { supabase } from "@/integrations/supabase/client";
+import { UserMission, MentorSession, RecentlyViewedCollege, Scholarship, UserProfile, College, Mentor } from "./types";
 
 // Update getScholarships function to use new table
-export const getScholarships = async () => {
+export const getScholarships = async (): Promise<{ scholarships: Scholarship[], error: any }> => {
   try {
     const { data, error } = await supabase
       .from('scholarships')
@@ -18,7 +20,7 @@ export const getScholarships = async () => {
 };
 
 // Update getUserMissions to use new user_missions table
-export const getUserMissions = async (userId: string) => {
+export const getUserMissions = async (userId: string): Promise<{ missions: UserMission[], error: any }> => {
   try {
     // First check if the user has any missions assigned
     const { data: existingMissions, error: checkError } = await supabase
@@ -189,37 +191,45 @@ export const updateUserXP = async (userId: string, xpAmount: number) => {
 };
 
 // College related functions
-export const getColleges = async (filters: any = {}) => {
-  let query = supabase.from('colleges').select('*');
-  
-  // Apply filters if provided
-  if (filters.stream) {
-    query = query.eq('stream', filters.stream);
+export const getColleges = async (filters: any = {}): Promise<{ colleges: College[], error: any }> => {
+  try {
+    let query = supabase.from('colleges').select('*');
+    
+    // Apply filters if provided
+    if (filters.stream) {
+      query = query.eq('stream', filters.stream);
+    }
+    
+    if (filters.state) {
+      query = query.eq('state', filters.state);
+    }
+    
+    if (filters.rating && filters.rating > 0) {
+      query = query.gte('rating', filters.rating);
+    }
+    
+    if (filters.budget && filters.budget.length === 2) {
+      query = query.gte('budget_value', filters.budget[0])
+                    .lte('budget_value', filters.budget[1]);
+    }
+    
+    if (filters.search) {
+      query = query.or(`name.ilike.%${filters.search}%,location.ilike.%${filters.search}%`);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    
+    return { colleges: data || [], error: null };
+  } catch (err) {
+    console.error("Error fetching colleges:", err);
+    return { colleges: [], error: err };
   }
-  
-  if (filters.state) {
-    query = query.eq('state', filters.state);
-  }
-  
-  if (filters.rating && filters.rating > 0) {
-    query = query.gte('rating', filters.rating);
-  }
-  
-  if (filters.budget && filters.budget.length === 2) {
-    query = query.gte('budget_value', filters.budget[0])
-                  .lte('budget_value', filters.budget[1]);
-  }
-  
-  if (filters.search) {
-    query = query.or(`name.ilike.%${filters.search}%,location.ilike.%${filters.search}%`);
-  }
-  
-  const { data, error } = await query;
-  return { colleges: data, error };
 };
 
 // Mentors related functions - improved to include more error handling
-export const getMentors = async () => {
+export const getMentors = async (): Promise<{ mentors: Mentor[], error: any }> => {
   try {
     const { data, error } = await supabase
       .from('mentors')
@@ -263,7 +273,26 @@ export const bookMentorSession = async (userId: string, mentorId: number, schedu
   }
 };
 
-export const getUserSessions = async (userId: string) => {
+export const cancelMentorSession = async (sessionId: number) => {
+  try {
+    const { data, error } = await supabase
+      .from('sessions')
+      .delete()
+      .eq('id', sessionId);
+    
+    if (error) {
+      console.error("Error cancelling mentor session:", error.message);
+      throw error;
+    }
+    
+    return { data, error: null };
+  } catch (err) {
+    console.error("Exception in cancelMentorSession:", err);
+    return { data: null, error: err };
+  }
+};
+
+export const getUserSessions = async (userId: string): Promise<{ sessions: MentorSession[], error: any }> => {
   try {
     const { data, error } = await supabase
       .from('sessions')
@@ -306,7 +335,8 @@ export const updateMissionStatus = async (missionId: number, userId: string, com
         status: completed ? 'completed' : 'pending',
         completed_on: completed ? new Date().toISOString() : null,
       })
-      .eq('id', missionId);
+      .eq('id', missionId)
+      .eq('user_id', userId);  // Add this line to ensure RLS policy compliance
     
     if (error) {
       console.error("Error updating mission status:", error.message);

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,20 +36,17 @@ const Scholarships = () => {
     fetchScholarships();
   }, [toast]);
   
-  // Format date for display
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   };
   
-  // Filter scholarships based on search query
   const filteredScholarships = scholarships.filter(scholarship => 
     scholarship.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     scholarship.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
     scholarship.eligibility.toLowerCase().includes(searchQuery.toLowerCase())
   );
   
-  // Handle apply click
   const handleApplyClick = (name: string) => {
     toast({
       title: "Scholarship Application",
@@ -69,7 +65,6 @@ const Scholarships = () => {
         <p className="text-muted-foreground">Discover financial aid opportunities to support your education</p>
       </div>
       
-      {/* Search bar */}
       <div className="relative">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
@@ -80,7 +75,6 @@ const Scholarships = () => {
         />
       </div>
       
-      {/* Scholarship listings */}
       {filteredScholarships.length > 0 ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredScholarships.map(scholarship => (

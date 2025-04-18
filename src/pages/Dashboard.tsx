@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -103,10 +102,10 @@ const Dashboard = () => {
         });
         
         // Show level up notification if applicable
-        if (xpResult.levelUp) {
+        if (xpResult && xpResult.levelUp) {
           toast({
             title: "Level Up!",
-            description: `Congratulations! You're now level ${xpResult.newLevel}!`,
+            description: `Congratulations! You're now level ${xpResult.newLevel || 1}!`,
           });
         }
       } else {

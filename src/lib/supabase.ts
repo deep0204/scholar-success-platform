@@ -305,12 +305,44 @@ export const updateMissionStatus = async (missionId: number, userId: string, com
     
     if (xpResult.error) {
       console.error("Error updating user XP:", xpResult.error);
+      // Return a consistent response structure even for error cases
+      return { 
+        data: null, 
+        error: xpResult.error, 
+        xpChange, 
+        xpResult: { 
+          newXP: 0, 
+          newLevel: 0, 
+          levelUp: false, 
+          error: xpResult.error 
+        } 
+      };
     }
     
-    return { data, error: null, xpChange, xpResult };
+    return { 
+      data, 
+      error: null, 
+      xpChange, 
+      xpResult: { 
+        newXP: xpResult.newXP || 0, 
+        newLevel: xpResult.newLevel || 0, 
+        levelUp: xpResult.levelUp || false 
+      } 
+    };
   } catch (err) {
     console.error("Exception in updateMissionStatus:", err);
-    return { data: null, error: err, xpChange: 0, xpResult: { error: err } };
+    // Ensure consistent return structure
+    return { 
+      data: null, 
+      error: err, 
+      xpChange: 0, 
+      xpResult: { 
+        newXP: 0, 
+        newLevel: 0, 
+        levelUp: false, 
+        error: err 
+      } 
+    };
   }
 };
 
@@ -558,5 +590,25 @@ export const getRecentlyViewedColleges = async (userId: string) => {
   } catch (err) {
     console.error("Exception in getRecentlyViewedColleges:", err);
     return { recentColleges: [], error: err };
+  }
+};
+
+// Adding the missing getScholarships function
+export const getScholarships = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('scholarships')
+      .select('*')
+      .order('last_date', { ascending: true });
+    
+    if (error) {
+      console.error("Error fetching scholarships:", error.message);
+      throw error;
+    }
+    
+    return { scholarships: data || [], error: null };
+  } catch (err) {
+    console.error("Exception in getScholarships:", err);
+    return { scholarships: [], error: err };
   }
 };

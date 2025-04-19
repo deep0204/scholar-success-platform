@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -81,9 +80,11 @@ const Dashboard = () => {
     if (!user?.id) return;
     
     try {
+      console.log("Calling updateMissionStatus with:", missionId, user.id, completed);
       const { error, xpChange, xpResult } = await updateMissionStatus(missionId, user.id, completed);
       
       if (error) {
+        console.error("Error from updateMissionStatus:", error);
         throw error;
       }
       

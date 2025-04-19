@@ -4,7 +4,7 @@ export interface UserMission {
   user_id: string;
   mission_text: string;
   xp: number;
-  status: 'pending' | 'completed';
+  status: string; // Changed from 'pending' | 'completed' to string to match database
   mission_type: string;
   completed_on: string | null;
   created_at: string;
@@ -26,7 +26,7 @@ export interface MentorSession {
   user_id: string;
   mentor_id: number;
   scheduled_date: string;
-  status: 'pending' | 'confirmed' | 'cancelled';
+  status: string; // Changed from specific union type to string to match database
   created_at: string;
   mentors: Mentor;
 }

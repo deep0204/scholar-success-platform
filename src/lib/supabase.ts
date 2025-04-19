@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { UserMission, MentorSession, RecentlyViewedCollege, Scholarship, UserProfile, College, Mentor } from "./types";
 
@@ -328,6 +327,14 @@ export const updateMissionStatus = async (missionId: number, userId: string, com
     
     const xpChange = completed ? (missionData?.xp || 0) : -(missionData?.xp || 0);
     
+    console.log("Updating mission status:", {
+      missionId,
+      userId,
+      completed,
+      status: completed ? 'completed' : 'pending',
+      completedOn: completed ? new Date().toISOString() : null
+    });
+
     // Update mission status
     const { data, error } = await supabase
       .from('user_missions')
@@ -335,13 +342,14 @@ export const updateMissionStatus = async (missionId: number, userId: string, com
         status: completed ? 'completed' : 'pending',
         completed_on: completed ? new Date().toISOString() : null,
       })
-      .eq('id', missionId)
-      .eq('user_id', userId);  // Add this line to ensure RLS policy compliance
+      .eq('id', missionId);
     
     if (error) {
       console.error("Error updating mission status:", error.message);
       throw error;
     }
+    
+    console.log("Mission status updated successfully");
     
     // Update user XP
     const xpResult = await updateUserXP(userId, xpChange);

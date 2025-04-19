@@ -156,6 +156,7 @@ const Colleges = () => {
     );
   }
 
+  // Render the colleges page with all necessary components
   return (
     <div className="space-y-6 animate-fade-in">
       <div>

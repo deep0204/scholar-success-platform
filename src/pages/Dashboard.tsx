@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -79,7 +78,7 @@ const Dashboard = () => {
     });
   };
 
-  // Handle checkbox change for weekly missions
+  // Handle checkbox change for weekly missions with improved error handling
   const handleMissionComplete = async (missionId: number, completed: boolean) => {
     if (!user?.id) return;
     
@@ -93,9 +92,12 @@ const Dashboard = () => {
         )
       );
       
+      console.log("Updating mission:", missionId, "to", completed ? "completed" : "pending");
+      
       const { error, xpChange, xpResult } = await updateMissionStatus(missionId, user.id, completed);
       
       if (error) {
+        console.error("Error updating mission:", error);
         // Revert the UI change if there was an error
         setWeeklyMissions(prev => 
           prev.map(mission => 
@@ -105,7 +107,13 @@ const Dashboard = () => {
           )
         );
         
-        throw error;
+        toast({
+          title: "Error",
+          description: "Failed to update mission status. Please try again.",
+          variant: "destructive",
+        });
+        
+        return;
       }
       
       // Show toast notification
@@ -139,7 +147,7 @@ const Dashboard = () => {
     }
   };
 
-  // Handle cancellation of mentor session
+  // Handle cancellation of mentor session with improved implementation
   const handleCancelSession = async (sessionId: number) => {
     if (!user?.id) return;
     
@@ -147,16 +155,26 @@ const Dashboard = () => {
       // Optimistically update UI
       setUpcomingSessions(prev => prev.filter(session => session.id !== sessionId));
       
+      console.log("Cancelling session:", sessionId);
+      
       const { error } = await cancelMentorSession(sessionId);
       
       if (error) {
+        console.error("Error cancelling session:", error);
+        
         // If there's an error, refetch the sessions to restore the accurate state
         const { sessions } = await getUserSessions(user.id);
         if (sessions) {
           setUpcomingSessions(sessions);
         }
         
-        throw error;
+        toast({
+          title: "Error",
+          description: "Failed to cancel session. Please try again.",
+          variant: "destructive",
+        });
+        
+        return;
       }
       
       // Show toast notification

@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { ExternalLink, Search, School } from 'lucide-react';
+import { ExternalLink, Search, School, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getColleges, viewCollege } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -26,6 +26,7 @@ const Colleges = () => {
   const [streams, setStreams] = useState<string[]>([]);
   const [states, setStates] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     const fetchColleges = async () => {
@@ -39,15 +40,20 @@ const Colleges = () => {
           throw collegeError;
         }
         
-        setColleges(data || []);
+        if (!data || data.length === 0) {
+          setColleges([]);
+          setError("No colleges found. Please try again later.");
+          return;
+        }
+        
+        console.log("Fetched colleges:", data.length);
+        setColleges(data);
         
         // Extract unique streams and states
-        if (data && data.length > 0) {
-          const uniqueStreams = Array.from(new Set(data.map(college => college.stream)));
-          const uniqueStates = Array.from(new Set(data.map(college => college.state)));
-          setStreams(uniqueStreams);
-          setStates(uniqueStates);
-        }
+        const uniqueStreams = Array.from(new Set(data.map(college => college.stream)));
+        const uniqueStates = Array.from(new Set(data.map(college => college.state)));
+        setStreams(uniqueStreams);
+        setStates(uniqueStates);
       } catch (err) {
         console.error("Error fetching colleges:", err);
         setError("Failed to fetch colleges. Please try again later.");
@@ -74,8 +80,9 @@ const Colleges = () => {
 
   // Filter colleges based on selected filters
   const filteredColleges = colleges.filter(college => {
-    const matchesSearch = college.name?.toLowerCase().includes(filters.search.toLowerCase()) || 
-                          college.location?.toLowerCase().includes(filters.search.toLowerCase()) || false;
+    const matchesSearch = filters.search === '' || 
+                         (college.name?.toLowerCase().includes(filters.search.toLowerCase()) || 
+                          college.location?.toLowerCase().includes(filters.search.toLowerCase()));
     
     const matchesStream = filters.stream === '' || college.stream === filters.stream;
     const matchesState = filters.state === '' || college.state === filters.state;
@@ -87,11 +94,15 @@ const Colleges = () => {
   });
 
   // Handle applying to a college
-  const handleApplyClick = (collegeName: string) => {
+  const handleApplyClick = (collegeName: string, link: string) => {
     toast({
       title: "Application Link",
       description: `Opening application page for ${collegeName}`,
     });
+    
+    if (link) {
+      window.open(link, '_blank');
+    }
   };
 
   // Handle viewing college details
@@ -141,30 +152,6 @@ const Colleges = () => {
     );
   }
 
-  // If no colleges found after loading
-  if (colleges.length === 0) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">College Explorer</h1>
-          <p className="text-muted-foreground">Find the perfect college for your future</p>
-        </div>
-        <Card className="text-center p-8">
-          <CardContent className="pt-6 flex flex-col items-center">
-            <School className="h-16 w-16 text-muted-foreground mb-4" />
-            <p className="mb-4">No colleges available at the moment. Please check back later.</p>
-            <Button 
-              onClick={() => window.location.reload()}
-              className="bg-campus-blue hover:bg-campus-blue/90"
-            >
-              Refresh Colleges
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   // Render the colleges page with all necessary components
   return (
     <div className="space-y-6 animate-fade-in">
@@ -174,95 +161,110 @@ const Colleges = () => {
       </div>
       
       {/* Filter Section */}
-      <Card className="mb-8">
-        <CardContent className="pt-6">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-            {/* Search Input */}
-            <div className="col-span-1 lg:col-span-2">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search colleges..."
-                  className="pl-8"
-                  value={filters.search}
-                  onChange={(e) => setFilters({...filters, search: e.target.value})}
-                />
+      <Card>
+        <CardHeader className="pb-0">
+          <div className="flex items-center justify-between">
+            <div className="relative lg:w-1/3">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search colleges..."
+                className="pl-8"
+                value={filters.search}
+                onChange={(e) => setFilters({...filters, search: e.target.value})}
+              />
+            </div>
+            <Button 
+              variant="outline" 
+              className="flex items-center gap-2"
+              onClick={() => setShowFilters(!showFilters)}
+            >
+              <Filter className="h-4 w-4" /> 
+              {showFilters ? 'Hide Filters' : 'Show Filters'}
+            </Button>
+          </div>
+        </CardHeader>
+        
+        {showFilters && (
+          <CardContent className="pt-4">
+            <div className="grid gap-4 md:grid-cols-3">
+              {/* Stream Filter */}
+              <div>
+                <label className="text-sm font-medium mb-1 block">Stream</label>
+                <Select 
+                  value={filters.stream}
+                  onValueChange={(value) => setFilters({...filters, stream: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Streams" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Streams</SelectItem>
+                    {streams.map(stream => (
+                      <SelectItem key={stream} value={stream}>{stream}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* State Filter */}
+              <div>
+                <label className="text-sm font-medium mb-1 block">State</label>
+                <Select
+                  value={filters.state}
+                  onValueChange={(value) => setFilters({...filters, state: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All States" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All States</SelectItem>
+                    {states.map(state => (
+                      <SelectItem key={state} value={state}>{state}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Rating Filter */}
+              <div>
+                <label className="text-sm font-medium mb-1 block">Rating</label>
+                <Select
+                  value={filters.rating.toString()}
+                  onValueChange={(value) => setFilters({...filters, rating: parseFloat(value)})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Any Rating" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Any Rating</SelectItem>
+                    <SelectItem value="4">4+ Stars</SelectItem>
+                    <SelectItem value="4.5">4.5+ Stars</SelectItem>
+                    <SelectItem value="4.8">4.8+ Stars</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             
-            {/* Stream Filter */}
-            <div>
-              <Select 
-                value={filters.stream}
-                onValueChange={(value) => setFilters({...filters, stream: value})}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Stream" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All Streams</SelectItem>
-                  {streams.map(stream => (
-                    <SelectItem key={stream} value={stream}>{stream}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Budget Slider */}
+            <div className="mt-6">
+              <div className="flex justify-between mb-2">
+                <span className="text-sm font-medium">Budget Range</span>
+                <span className="text-sm text-muted-foreground">
+                  {formatBudget(filters.budget[0])} - {formatBudget(filters.budget[1])}
+                </span>
+              </div>
+              <Slider
+                defaultValue={[0, 1000000]}
+                min={0}
+                max={1000000}
+                step={50000}
+                value={filters.budget}
+                onValueChange={(value) => setFilters({...filters, budget: value})}
+                className="mt-2"
+              />
             </div>
-            
-            {/* State Filter */}
-            <div>
-              <Select
-                value={filters.state}
-                onValueChange={(value) => setFilters({...filters, state: value})}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="State" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All States</SelectItem>
-                  {states.map(state => (
-                    <SelectItem key={state} value={state}>{state}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            {/* Rating Filter */}
-            <div>
-              <Select
-                value={filters.rating.toString()}
-                onValueChange={(value) => setFilters({...filters, rating: parseFloat(value)})}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Rating" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">Any Rating</SelectItem>
-                  <SelectItem value="4">4+ Stars</SelectItem>
-                  <SelectItem value="4.5">4.5+ Stars</SelectItem>
-                  <SelectItem value="4.8">4.8+ Stars</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          
-          {/* Budget Slider */}
-          <div className="mt-6">
-            <div className="flex justify-between mb-2">
-              <span className="text-sm font-medium">Budget Range</span>
-              <span className="text-sm text-muted-foreground">
-                {formatBudget(filters.budget[0])} - {formatBudget(filters.budget[1])}
-              </span>
-            </div>
-            <Slider
-              defaultValue={[0, 1000000]}
-              min={0}
-              max={1000000}
-              step={50000}
-              value={filters.budget}
-              onValueChange={(value) => setFilters({...filters, budget: value})}
-            />
-          </div>
-        </CardContent>
+          </CardContent>
+        )}
       </Card>
       
       {/* Results Section */}
@@ -280,7 +282,8 @@ const Colleges = () => {
                   alt={college.name} 
                   className="w-full h-full object-cover"
                   onError={(e) => {
-                    e.currentTarget.src = '/placeholder.svg';
+                    const target = e.target as HTMLImageElement;
+                    target.src = '/placeholder.svg';
                   }}
                 />
               </div>
@@ -313,8 +316,7 @@ const Colleges = () => {
                   className="w-full bg-campus-blue hover:bg-campus-blue/90"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleApplyClick(college.name);
-                    window.open(college.apply_link, '_blank');
+                    handleApplyClick(college.name, college.apply_link);
                   }}
                 >
                   <ExternalLink className="mr-2 h-4 w-4" />
@@ -325,10 +327,30 @@ const Colleges = () => {
           ))}
         </div>
       ) : (
-        <div className="text-center py-12">
-          <h3 className="text-lg font-medium">No colleges found</h3>
-          <p className="text-muted-foreground">Try adjusting your filters to see more results.</p>
-        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center p-8">
+            <School className="h-16 w-16 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No colleges found</h3>
+            <p className="text-muted-foreground text-center">
+              Try adjusting your filters to see more results.
+            </p>
+            {(filters.search || filters.stream || filters.state || filters.rating > 0) && (
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => setFilters({
+                  search: '',
+                  stream: '',
+                  state: '',
+                  budget: [0, 1000000],
+                  rating: 0,
+                })}
+              >
+                Reset Filters
+              </Button>
+            )}
+          </CardContent>
+        </Card>
       )}
     </div>
   );

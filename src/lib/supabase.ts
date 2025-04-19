@@ -160,6 +160,7 @@ export const getUserProfile = async (userId: string) => {
 
 // Function to update user XP
 export const updateUserXP = async (userId: string, xpAmount: number) => {
+  console.log("Starting updateUserXP:", { userId, xpAmount });
   try {
     // First get current XP
     const { data: userData, error: fetchError } = await supabase
@@ -168,14 +169,23 @@ export const updateUserXP = async (userId: string, xpAmount: number) => {
       .eq('id', userId)
       .single();
     
-    if (fetchError) return { data: null, error: fetchError };
+    if (fetchError) {
+      console.error("Error fetching user data:", fetchError);
+      return { data: null, error: fetchError, newXP: 0, newLevel: 0, levelUp: false };
+    }
     
     let currentXP = userData?.xp || 0;
-    let newXP = currentXP + xpAmount;
     let currentLevel = userData?.level || 1;
+    
+    console.log("Current user stats:", { currentXP, currentLevel });
+    
+    let newXP = Math.max(0, currentXP + xpAmount); // Ensure XP doesn't go below 0
     
     // Calculate new level (100 XP per level)
     let newLevel = Math.floor(newXP / 100) + 1;
+    let levelUp = newLevel > currentLevel;
+    
+    console.log("New user stats:", { newXP, newLevel, levelUp });
     
     const { data, error } = await supabase
       .from('users')
@@ -186,17 +196,22 @@ export const updateUserXP = async (userId: string, xpAmount: number) => {
       .eq('id', userId)
       .select();
     
-    const levelUp = newLevel > currentLevel;
+    if (error) {
+      console.error("Error updating user XP:", error);
+      return { data: null, error, newXP: 0, newLevel: 0, levelUp: false };
+    }
+    
+    console.log("User XP updated successfully:", { newXP, newLevel, levelUp });
     
     return { 
       data, 
-      error, 
+      error: null, 
       newXP, 
       newLevel, 
       levelUp 
     };
   } catch (err) {
-    console.error("Error in updateUserXP:", err);
+    console.error("Exception in updateUserXP:", err);
     return { 
       data: null, 
       error: err, 
@@ -292,23 +307,9 @@ export const bookMentorSession = async (userId: string, mentorId: number, schedu
 
 export const cancelMentorSession = async (sessionId: number) => {
   try {
-    // First check if the session exists
-    const { data: sessionData, error: checkError } = await supabase
-      .from('sessions')
-      .select('*')
-      .eq('id', sessionId)
-      .single();
-      
-    if (checkError) {
-      console.error("Error finding session:", checkError.message);
-      throw checkError;
-    }
+    console.log("Cancelling mentor session:", sessionId);
     
-    if (!sessionData) {
-      return { data: null, error: new Error("Session not found") };
-    }
-    
-    // Delete the session
+    // Delete the session directly without checking first
     const { data, error } = await supabase
       .from('sessions')
       .delete()
@@ -319,6 +320,7 @@ export const cancelMentorSession = async (sessionId: number) => {
       throw error;
     }
     
+    console.log("Mentor session cancelled successfully:", sessionId);
     return { data, error: null };
   } catch (err) {
     console.error("Exception in cancelMentorSession:", err);
@@ -347,6 +349,7 @@ export const getUserSessions = async (userId: string): Promise<{ sessions: Mento
 };
 
 export const updateMissionStatus = async (missionId: number, userId: string, completed: boolean) => {
+  console.log("Starting updateMissionStatus:", { missionId, userId, completed });
   try {
     // Find the mission to get XP value
     const { data: missionData, error: missionError } = await supabase
@@ -386,21 +389,19 @@ export const updateMissionStatus = async (missionId: number, userId: string, com
     
     console.log("Mission status updated successfully");
     
-    // Update user XP
-    const xpResult = await updateUserXP(userId, xpChange);
+    // Update user XP - ensuring this works properly
+    const { data: xpData, error: xpError, newXP, newLevel, levelUp } = await updateUserXP(userId, xpChange);
     
-    if (xpResult.error) {
-      console.error("Error updating user XP:", xpResult.error);
-      // Return a consistent response structure even for error cases
+    if (xpError) {
+      console.error("Error updating user XP:", xpError);
       return { 
         data: null, 
-        error: xpResult.error, 
+        error: xpError, 
         xpChange, 
         xpResult: { 
           newXP: 0, 
           newLevel: 0, 
-          levelUp: false, 
-          error: xpResult.error 
+          levelUp: false 
         } 
       };
     }
@@ -410,14 +411,13 @@ export const updateMissionStatus = async (missionId: number, userId: string, com
       error: null, 
       xpChange, 
       xpResult: { 
-        newXP: xpResult.newXP || 0, 
-        newLevel: xpResult.newLevel || 0, 
-        levelUp: xpResult.levelUp || false 
+        newXP: newXP || 0, 
+        newLevel: newLevel || 0, 
+        levelUp: levelUp || false 
       } 
     };
   } catch (err) {
     console.error("Exception in updateMissionStatus:", err);
-    // Ensure consistent return structure
     return { 
       data: null, 
       error: err, 
@@ -425,8 +425,7 @@ export const updateMissionStatus = async (missionId: number, userId: string, com
       xpResult: { 
         newXP: 0, 
         newLevel: 0, 
-        levelUp: false, 
-        error: err 
+        levelUp: false 
       } 
     };
   }

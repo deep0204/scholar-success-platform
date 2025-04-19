@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { UserMission, MentorSession, RecentlyViewedCollege, Scholarship, UserProfile, College, Mentor } from "./types";
 
@@ -158,11 +159,11 @@ export const getUserProfile = async (userId: string) => {
   return { profile: data, error };
 };
 
-// Function to update user XP
+// Function to update user XP - Rewritten for robustness
 export const updateUserXP = async (userId: string, xpAmount: number) => {
   console.log("Starting updateUserXP:", { userId, xpAmount });
   try {
-    // First get current XP
+    // First get current XP and level
     const { data: userData, error: fetchError } = await supabase
       .from('users')
       .select('xp, level')
@@ -174,19 +175,21 @@ export const updateUserXP = async (userId: string, xpAmount: number) => {
       return { data: null, error: fetchError, newXP: 0, newLevel: 0, levelUp: false };
     }
     
-    let currentXP = userData?.xp || 0;
-    let currentLevel = userData?.level || 1;
+    const currentXP = userData?.xp || 0;
+    const currentLevel = userData?.level || 1;
     
     console.log("Current user stats:", { currentXP, currentLevel });
     
-    let newXP = Math.max(0, currentXP + xpAmount); // Ensure XP doesn't go below 0
+    // Ensure XP doesn't go below 0
+    const newXP = Math.max(0, Number(currentXP) + Number(xpAmount)); 
     
     // Calculate new level (100 XP per level)
-    let newLevel = Math.floor(newXP / 100) + 1;
-    let levelUp = newLevel > currentLevel;
+    const newLevel = Math.floor(newXP / 100) + 1;
+    const levelUp = newLevel > currentLevel;
     
     console.log("New user stats:", { newXP, newLevel, levelUp });
     
+    // Update user XP and level in the database
     const { data, error } = await supabase
       .from('users')
       .update({
@@ -305,11 +308,12 @@ export const bookMentorSession = async (userId: string, mentorId: number, schedu
   }
 };
 
+// Rewritten function to completely delete session from database
 export const cancelMentorSession = async (sessionId: number) => {
   try {
     console.log("Cancelling mentor session:", sessionId);
     
-    // Delete the session directly 
+    // Delete the session completely from the database
     const { data, error } = await supabase
       .from('sessions')
       .delete()
@@ -320,7 +324,7 @@ export const cancelMentorSession = async (sessionId: number) => {
       return { data: null, error };
     }
     
-    console.log("Mentor session cancelled successfully:", sessionId);
+    console.log("Mentor session cancelled and deleted successfully:", sessionId);
     return { data, error: null };
   } catch (err) {
     console.error("Exception in cancelMentorSession:", err);
@@ -348,13 +352,14 @@ export const getUserSessions = async (userId: string): Promise<{ sessions: Mento
   }
 };
 
+// Rewritten function for mission status update with proper XP calculation
 export const updateMissionStatus = async (missionId: number, userId: string, completed: boolean) => {
   console.log("Starting updateMissionStatus:", { missionId, userId, completed });
   try {
     // Find the mission to get XP value
     const { data: missionData, error: missionError } = await supabase
       .from('user_missions')
-      .select('xp')
+      .select('xp, status')
       .eq('id', missionId)
       .single();
       
@@ -363,17 +368,24 @@ export const updateMissionStatus = async (missionId: number, userId: string, com
       return { data: null, error: missionError, xpChange: 0, xpResult: { newXP: 0, newLevel: 0, levelUp: false } };
     }
     
-    const xpChange = completed ? (missionData?.xp || 0) : -(missionData?.xp || 0);
+    // Only award or remove XP if the status actually changes
+    const currentStatus = missionData?.status || 'pending';
+    const xpChange = (completed && currentStatus !== 'completed') ? 
+                      (missionData?.xp || 0) : 
+                      (!completed && currentStatus === 'completed') ? 
+                        -(missionData?.xp || 0) : 
+                        0;
     
     console.log("Updating mission status:", {
       missionId,
       userId,
       completed,
       status: completed ? 'completed' : 'pending',
-      completedOn: completed ? new Date().toISOString() : null
+      completedOn: completed ? new Date().toISOString() : null,
+      xpChange
     });
 
-    // Update mission status - fixed the issue by using eq() correctly and ensuring response
+    // Update mission status
     const { data, error } = await supabase
       .from('user_missions')
       .update({
@@ -390,32 +402,34 @@ export const updateMissionStatus = async (missionId: number, userId: string, com
     
     console.log("Mission status updated successfully:", data);
     
-    // Update user XP - ensuring this works properly
-    const { data: xpData, error: xpError, newXP, newLevel, levelUp } = await updateUserXP(userId, xpChange);
-    
-    if (xpError) {
-      console.error("Error updating user XP:", xpError);
-      return { 
-        data, 
-        error: xpError, 
-        xpChange, 
-        xpResult: { 
-          newXP: 0, 
-          newLevel: 0, 
-          levelUp: false 
-        } 
-      };
+    // Only update XP if there's a change
+    let xpResult = { newXP: 0, newLevel: 0, levelUp: false };
+    if (xpChange !== 0) {
+      // Update user XP
+      const { newXP, newLevel, levelUp, error: xpError } = await updateUserXP(userId, xpChange);
+      
+      if (xpError) {
+        console.error("Error updating user XP:", xpError);
+        return { 
+          data, 
+          error: xpError, 
+          xpChange, 
+          xpResult: { 
+            newXP: 0, 
+            newLevel: 0, 
+            levelUp: false 
+          } 
+        };
+      }
+      
+      xpResult = { newXP, newLevel, levelUp };
     }
     
     return { 
       data, 
       error: null, 
       xpChange, 
-      xpResult: { 
-        newXP: newXP || 0, 
-        newLevel: newLevel || 0, 
-        levelUp: levelUp || false 
-      } 
+      xpResult
     };
   } catch (err) {
     console.error("Exception in updateMissionStatus:", err);
@@ -429,6 +443,68 @@ export const updateMissionStatus = async (missionId: number, userId: string, com
         levelUp: false 
       } 
     };
+  }
+};
+
+// New function to mark a college as viewed
+export const markCollegeAsViewed = async (userId: string, collegeId: number) => {
+  try {
+    console.log("Marking college as viewed:", { userId, collegeId });
+    
+    // Check if the college has already been viewed by this user
+    const { data: existingView, error: checkError } = await supabase
+      .from('recently_viewed_colleges')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('college_id', collegeId)
+      .limit(1);
+    
+    if (checkError) {
+      console.error("Error checking if college was viewed:", checkError);
+      return { data: null, error: checkError };
+    }
+    
+    // If already viewed, update the viewed_at timestamp
+    if (existingView && existingView.length > 0) {
+      const { data, error } = await supabase
+        .from('recently_viewed_colleges')
+        .update({
+          viewed_at: new Date().toISOString()
+        })
+        .eq('id', existingView[0].id)
+        .select();
+      
+      if (error) {
+        console.error("Error updating viewed college:", error);
+        return { data: null, error };
+      }
+      
+      return { data, error: null };
+    }
+    
+    // If not viewed before, add a new entry
+    const { data, error } = await supabase
+      .from('recently_viewed_colleges')
+      .insert({
+        user_id: userId,
+        college_id: collegeId,
+        viewed_at: new Date().toISOString()
+      })
+      .select();
+    
+    if (error) {
+      console.error("Error marking college as viewed:", error);
+      return { data: null, error };
+    }
+    
+    // Add XP for viewing a new college
+    await updateUserXP(userId, 5);
+    
+    console.log("College marked as viewed successfully:", data);
+    return { data, error: null };
+  } catch (err) {
+    console.error("Exception in markCollegeAsViewed:", err);
+    return { data: null, error: err };
   }
 };
 
@@ -633,29 +709,7 @@ export const getLeaderboard = async (limit = 10) => {
 
 // Create initial data - helper function for recently viewed colleges
 export const viewCollege = async (userId: string, collegeId: number) => {
-  try {
-    // Add to recently viewed colleges
-    const { data, error } = await supabase
-      .from('recently_viewed_colleges')
-      .insert({
-        user_id: userId,
-        college_id: collegeId,
-        viewed_at: new Date().toISOString(),
-      });
-    
-    if (error) {
-      console.error("Error adding to recently viewed colleges:", error.message);
-      throw error;
-    }
-    
-    // Add XP for viewing a college
-    await updateUserXP(userId, 5);
-    
-    return { data, error: null };
-  } catch (err) {
-    console.error("Exception in viewCollege:", err);
-    return { data: null, error: err };
-  }
+  return markCollegeAsViewed(userId, collegeId); // Use the new function
 };
 
 export const getRecentlyViewedColleges = async (userId: string) => {

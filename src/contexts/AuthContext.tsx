@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentUser, getUserProfile, signIn, signUp, signOut } from '@/lib/supabase';

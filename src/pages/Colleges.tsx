@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { ExternalLink, Search } from 'lucide-react';
+import { ExternalLink, Search, School } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getColleges, viewCollege } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { College } from '@/lib/types';
 
 const Colleges = () => {
   const { toast } = useToast();
@@ -21,10 +22,10 @@ const Colleges = () => {
     budget: [0, 1000000],
     rating: 0,
   });
-  const [colleges, setColleges] = useState([]);
-  const [streams, setStreams] = useState([]);
-  const [states, setStates] = useState([]);
-  const [error, setError] = useState(null);
+  const [colleges, setColleges] = useState<College[]>([]);
+  const [streams, setStreams] = useState<string[]>([]);
+  const [states, setStates] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchColleges = async () => {
@@ -64,7 +65,7 @@ const Colleges = () => {
   }, [toast]);
   
   // Format budget values
-  const formatBudget = (value) => {
+  const formatBudget = (value: number) => {
     if (value >= 100000) {
       return `₹${(value / 100000).toFixed(1)} Lakh`;
     }
@@ -73,8 +74,8 @@ const Colleges = () => {
 
   // Filter colleges based on selected filters
   const filteredColleges = colleges.filter(college => {
-    const matchesSearch = college.name.toLowerCase().includes(filters.search.toLowerCase()) || 
-                          college.location.toLowerCase().includes(filters.search.toLowerCase());
+    const matchesSearch = college.name?.toLowerCase().includes(filters.search.toLowerCase()) || 
+                          college.location?.toLowerCase().includes(filters.search.toLowerCase()) || false;
     
     const matchesStream = filters.stream === '' || college.stream === filters.stream;
     const matchesState = filters.state === '' || college.state === filters.state;
@@ -86,7 +87,7 @@ const Colleges = () => {
   });
 
   // Handle applying to a college
-  const handleApplyClick = (collegeName) => {
+  const handleApplyClick = (collegeName: string) => {
     toast({
       title: "Application Link",
       description: `Opening application page for ${collegeName}`,
@@ -94,7 +95,7 @@ const Colleges = () => {
   };
 
   // Handle viewing college details
-  const handleViewCollege = async (collegeId) => {
+  const handleViewCollege = async (collegeId: number) => {
     if (!user?.id) return;
     
     try {
@@ -108,7 +109,14 @@ const Colleges = () => {
   };
 
   if (loading) {
-    return <div className="p-4">Loading colleges...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-campus-blue"></div>
+          <p className="text-muted-foreground">Loading colleges...</p>
+        </div>
+      </div>
+    );
   }
   
   if (error) {
@@ -142,7 +150,8 @@ const Colleges = () => {
           <p className="text-muted-foreground">Find the perfect college for your future</p>
         </div>
         <Card className="text-center p-8">
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 flex flex-col items-center">
+            <School className="h-16 w-16 text-muted-foreground mb-4" />
             <p className="mb-4">No colleges available at the moment. Please check back later.</p>
             <Button 
               onClick={() => window.location.reload()}
@@ -262,7 +271,7 @@ const Colleges = () => {
           {filteredColleges.map((college) => (
             <Card 
               key={college.id} 
-              className="overflow-hidden hover:shadow-md transition-shadow"
+              className="overflow-hidden hover:shadow-md transition-shadow bg-card"
               onClick={() => handleViewCollege(college.id)}
             >
               <div className="h-48 bg-muted">

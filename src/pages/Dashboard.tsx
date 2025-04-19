@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -8,15 +9,16 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserMissions, updateMissionStatus, getUserSessions, getRecentlyViewedColleges, cancelMentorSession } from '@/lib/supabase';
+import { UserMission, MentorSession, RecentlyViewedCollege } from '@/lib/types';
 
 const Dashboard = () => {
   const { toast } = useToast();
   const { user, profile } = useAuth();
   const [loading, setLoading] = useState(true);
   
-  const [weeklyMissions, setWeeklyMissions] = useState([]);
-  const [upcomingSessions, setUpcomingSessions] = useState([]);
-  const [recentColleges, setRecentColleges] = useState([]);
+  const [weeklyMissions, setWeeklyMissions] = useState<UserMission[]>([]);
+  const [upcomingSessions, setUpcomingSessions] = useState<MentorSession[]>([]);
+  const [recentColleges, setRecentColleges] = useState<RecentlyViewedCollege[]>([]);
   const [notifications, setNotifications] = useState([
     { id: 1, text: 'New scholarship available for Science students', time: '2 hours ago' },
     { id: 2, text: 'Your mentor session is confirmed', time: '1 day ago' },
@@ -34,6 +36,8 @@ const Dashboard = () => {
     const fetchDashboardData = async () => {
       if (user?.id) {
         try {
+          setLoading(true);
+          
           // Fetch weekly missions
           const { missions, error: missionsError } = await getUserMissions(user.id);
           if (!missionsError && missions) {
@@ -64,7 +68,7 @@ const Dashboard = () => {
   }, [user?.id]);
   
   // Format date function
-  const formatDate = (dateString) => {
+  const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleString('en-US', { 
       weekday: 'short',
@@ -76,19 +80,11 @@ const Dashboard = () => {
   };
 
   // Handle checkbox change for weekly missions
-  const handleMissionComplete = async (missionId, completed) => {
+  const handleMissionComplete = async (missionId: number, completed: boolean) => {
     if (!user?.id) return;
     
     try {
-      console.log("Calling updateMissionStatus with:", missionId, user.id, completed);
-      const { error, xpChange, xpResult } = await updateMissionStatus(missionId, user.id, completed);
-      
-      if (error) {
-        console.error("Error from updateMissionStatus:", error);
-        throw error;
-      }
-      
-      // Update the local missions state
+      // Optimistically update UI
       setWeeklyMissions(prev => 
         prev.map(mission => 
           mission.id === missionId 
@@ -96,6 +92,21 @@ const Dashboard = () => {
             : mission
         )
       );
+      
+      const { error, xpChange, xpResult } = await updateMissionStatus(missionId, user.id, completed);
+      
+      if (error) {
+        // Revert the UI change if there was an error
+        setWeeklyMissions(prev => 
+          prev.map(mission => 
+            mission.id === missionId 
+              ? { ...mission, status: completed ? 'pending' : 'completed', completed_on: completed ? null : mission.completed_on } 
+              : mission
+          )
+        );
+        
+        throw error;
+      }
       
       // Show toast notification
       if (completed) {
@@ -129,18 +140,24 @@ const Dashboard = () => {
   };
 
   // Handle cancellation of mentor session
-  const handleCancelSession = async (sessionId) => {
+  const handleCancelSession = async (sessionId: number) => {
     if (!user?.id) return;
     
     try {
+      // Optimistically update UI
+      setUpcomingSessions(prev => prev.filter(session => session.id !== sessionId));
+      
       const { error } = await cancelMentorSession(sessionId);
       
       if (error) {
+        // If there's an error, refetch the sessions to restore the accurate state
+        const { sessions } = await getUserSessions(user.id);
+        if (sessions) {
+          setUpcomingSessions(sessions);
+        }
+        
         throw error;
       }
-      
-      // Remove the session from the list
-      setUpcomingSessions(prev => prev.filter(session => session.id !== sessionId));
       
       // Show toast notification
       toast({
@@ -167,14 +184,21 @@ const Dashboard = () => {
   };
 
   if (loading) {
-    return <div className="p-4">Loading dashboard data...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-campus-blue"></div>
+          <p className="text-muted-foreground">Loading dashboard data...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {profile?.full_name}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {profile?.full_name || 'Student'}</h1>
           <p className="text-muted-foreground">Here's an overview of your progress and activities.</p>
         </div>
       </div>
@@ -327,8 +351,8 @@ const Dashboard = () => {
             {upcomingSessions.map((session) => (
               <div key={session.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border rounded-md mb-3 last:mb-0">
                 <div>
-                  <h4 className="font-medium">{session.mentors.specialization}</h4>
-                  <p className="text-sm text-muted-foreground">with {session.mentors.name}</p>
+                  <h4 className="font-medium">{session.mentors?.specialization || 'Mentor Session'}</h4>
+                  <p className="text-sm text-muted-foreground">with {session.mentors?.name || 'Mentor'}</p>
                 </div>
                 <div className="flex flex-col md:flex-row gap-2 md:items-center">
                   <div className="text-sm flex items-center gap-1">
@@ -367,14 +391,17 @@ const Dashboard = () => {
                 <div key={item.id} className="flex gap-3 items-center">
                   <div className="w-16 h-16 rounded-md overflow-hidden bg-muted">
                     <img 
-                      src={item.colleges.image_url || '/placeholder.svg'} 
-                      alt={item.colleges.name}
+                      src={item.colleges?.image_url || '/placeholder.svg'} 
+                      alt={item.colleges?.name || 'College'}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/placeholder.svg';
+                      }}
                     />
                   </div>
                   <div>
-                    <h4 className="font-medium">{item.colleges.name}</h4>
-                    <p className="text-sm text-muted-foreground">{item.colleges.stream}</p>
+                    <h4 className="font-medium">{item.colleges?.name || 'College'}</h4>
+                    <p className="text-sm text-muted-foreground">{item.colleges?.stream || 'Stream'}</p>
                   </div>
                 </div>
               ))}

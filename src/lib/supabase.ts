@@ -160,33 +160,51 @@ export const getUserProfile = async (userId: string) => {
 
 // Function to update user XP
 export const updateUserXP = async (userId: string, xpAmount: number) => {
-  // First get current XP
-  const { data: userData, error: fetchError } = await supabase
-    .from('users')
-    .select('xp, level')
-    .eq('id', userId)
-    .single();
-  
-  if (fetchError) return { data: null, error: fetchError };
-  
-  let currentXP = userData.xp || 0;
-  let newXP = currentXP + xpAmount;
-  let currentLevel = userData.level || 1;
-  
-  // Calculate new level (100 XP per level)
-  let newLevel = Math.floor(newXP / 100) + 1;
-  
-  const { data, error } = await supabase
-    .from('users')
-    .update({
-      xp: newXP,
-      level: newLevel,
-    })
-    .eq('id', userId);
-  
-  const levelUp = newLevel > currentLevel;
-  
-  return { data, error, newXP, newLevel, levelUp };
+  try {
+    // First get current XP
+    const { data: userData, error: fetchError } = await supabase
+      .from('users')
+      .select('xp, level')
+      .eq('id', userId)
+      .single();
+    
+    if (fetchError) return { data: null, error: fetchError };
+    
+    let currentXP = userData?.xp || 0;
+    let newXP = currentXP + xpAmount;
+    let currentLevel = userData?.level || 1;
+    
+    // Calculate new level (100 XP per level)
+    let newLevel = Math.floor(newXP / 100) + 1;
+    
+    const { data, error } = await supabase
+      .from('users')
+      .update({
+        xp: newXP,
+        level: newLevel,
+      })
+      .eq('id', userId)
+      .select();
+    
+    const levelUp = newLevel > currentLevel;
+    
+    return { 
+      data, 
+      error, 
+      newXP, 
+      newLevel, 
+      levelUp 
+    };
+  } catch (err) {
+    console.error("Error in updateUserXP:", err);
+    return { 
+      data: null, 
+      error: err, 
+      newXP: 0,
+      newLevel: 0,
+      levelUp: false
+    };
+  }
 };
 
 // College related functions
@@ -274,6 +292,23 @@ export const bookMentorSession = async (userId: string, mentorId: number, schedu
 
 export const cancelMentorSession = async (sessionId: number) => {
   try {
+    // First check if the session exists
+    const { data: sessionData, error: checkError } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('id', sessionId)
+      .single();
+      
+    if (checkError) {
+      console.error("Error finding session:", checkError.message);
+      throw checkError;
+    }
+    
+    if (!sessionData) {
+      return { data: null, error: new Error("Session not found") };
+    }
+    
+    // Delete the session
     const { data, error } = await supabase
       .from('sessions')
       .delete()

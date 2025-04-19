@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -12,7 +13,7 @@ import { UserMission, MentorSession, RecentlyViewedCollege } from '@/lib/types';
 
 const Dashboard = () => {
   const { toast } = useToast();
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [loading, setLoading] = useState(true);
   
   const [weeklyMissions, setWeeklyMissions] = useState<UserMission[]>([]);
@@ -30,6 +31,9 @@ const Dashboard = () => {
     { id: 3, name: 'Mentor Mentee', awarded: false },
     { id: 4, name: 'Career Curious', awarded: false },
   ]);
+
+  const [processingMissions, setProcessingMissions] = useState<Record<number, boolean>>({});
+  const [processingSessions, setProcessingSessions] = useState<Record<number, boolean>>({});
   
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -81,8 +85,11 @@ const Dashboard = () => {
   // Handle checkbox change for weekly missions with improved error handling
   const handleMissionComplete = async (missionId: number, completed: boolean) => {
     if (!user?.id) return;
-    
+
     try {
+      // Set processing state to prevent multiple clicks
+      setProcessingMissions(prev => ({ ...prev, [missionId]: true }));
+      
       // Optimistically update UI
       setWeeklyMissions(prev => 
         prev.map(mission => 
@@ -116,6 +123,9 @@ const Dashboard = () => {
         return;
       }
       
+      // Refresh profile to get updated XP
+      refreshProfile();
+      
       // Show toast notification
       if (completed) {
         toast({
@@ -144,6 +154,9 @@ const Dashboard = () => {
         description: "Failed to update mission status. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      // Reset processing state
+      setProcessingMissions(prev => ({ ...prev, [missionId]: false }));
     }
   };
 
@@ -152,6 +165,9 @@ const Dashboard = () => {
     if (!user?.id) return;
     
     try {
+      // Set processing state to prevent multiple clicks
+      setProcessingSessions(prev => ({ ...prev, [sessionId]: true }));
+      
       // Optimistically update UI
       setUpcomingSessions(prev => prev.filter(session => session.id !== sessionId));
       
@@ -190,6 +206,9 @@ const Dashboard = () => {
         description: "Failed to cancel session. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      // Reset processing state
+      setProcessingSessions(prev => ({ ...prev, [sessionId]: false }));
     }
   };
 
@@ -315,6 +334,7 @@ const Dashboard = () => {
                     id={`mission-${mission.id}`}
                     checked={mission.status === 'completed'}
                     onCheckedChange={(checked) => handleMissionComplete(mission.id, checked === true)}
+                    disabled={processingMissions[mission.id]}
                   />
                   <div className="flex-1">
                     <label 
@@ -384,6 +404,7 @@ const Dashboard = () => {
                       size="icon"
                       className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-100"
                       onClick={() => handleCancelSession(session.id)}
+                      disabled={processingSessions[session.id]}
                       title="Cancel session"
                     >
                       <X className="h-4 w-4" />

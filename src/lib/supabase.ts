@@ -309,7 +309,7 @@ export const cancelMentorSession = async (sessionId: number) => {
   try {
     console.log("Cancelling mentor session:", sessionId);
     
-    // Delete the session directly without checking first
+    // Delete the session directly 
     const { data, error } = await supabase
       .from('sessions')
       .delete()
@@ -317,7 +317,7 @@ export const cancelMentorSession = async (sessionId: number) => {
     
     if (error) {
       console.error("Error cancelling mentor session:", error.message);
-      throw error;
+      return { data: null, error };
     }
     
     console.log("Mentor session cancelled successfully:", sessionId);
@@ -360,7 +360,7 @@ export const updateMissionStatus = async (missionId: number, userId: string, com
       
     if (missionError) {
       console.error("Error fetching mission data:", missionError.message);
-      throw missionError;
+      return { data: null, error: missionError, xpChange: 0, xpResult: { newXP: 0, newLevel: 0, levelUp: false } };
     }
     
     const xpChange = completed ? (missionData?.xp || 0) : -(missionData?.xp || 0);
@@ -373,21 +373,22 @@ export const updateMissionStatus = async (missionId: number, userId: string, com
       completedOn: completed ? new Date().toISOString() : null
     });
 
-    // Update mission status
+    // Update mission status - fixed the issue by using eq() correctly and ensuring response
     const { data, error } = await supabase
       .from('user_missions')
       .update({
         status: completed ? 'completed' : 'pending',
         completed_on: completed ? new Date().toISOString() : null,
       })
-      .eq('id', missionId);
+      .eq('id', missionId)
+      .select();
     
     if (error) {
       console.error("Error updating mission status:", error.message);
-      throw error;
+      return { data: null, error, xpChange: 0, xpResult: { newXP: 0, newLevel: 0, levelUp: false } };
     }
     
-    console.log("Mission status updated successfully");
+    console.log("Mission status updated successfully:", data);
     
     // Update user XP - ensuring this works properly
     const { data: xpData, error: xpError, newXP, newLevel, levelUp } = await updateUserXP(userId, xpChange);
@@ -395,7 +396,7 @@ export const updateMissionStatus = async (missionId: number, userId: string, com
     if (xpError) {
       console.error("Error updating user XP:", xpError);
       return { 
-        data: null, 
+        data, 
         error: xpError, 
         xpChange, 
         xpResult: { 

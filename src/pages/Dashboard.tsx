@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -13,7 +12,7 @@ import { UserMission, MentorSession, RecentlyViewedCollege } from '@/lib/types';
 
 const Dashboard = () => {
   const { toast } = useToast();
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile } = useAuth();
   const [loading, setLoading] = useState(true);
   
   const [weeklyMissions, setWeeklyMissions] = useState<UserMission[]>([]);
@@ -31,54 +30,39 @@ const Dashboard = () => {
     { id: 3, name: 'Mentor Mentee', awarded: false },
     { id: 4, name: 'Career Curious', awarded: false },
   ]);
-
-  const [processingMissions, setProcessingMissions] = useState<Record<number, boolean>>({});
-  const [processingSessions, setProcessingSessions] = useState<Record<number, boolean>>({});
-  
-  // Fetch all dashboard data
-  const fetchDashboardData = async () => {
-    if (user?.id) {
-      try {
-        setLoading(true);
-        
-        // Fetch weekly missions
-        const { missions, error: missionsError } = await getUserMissions(user.id);
-        if (!missionsError && missions) {
-          setWeeklyMissions(missions);
-        } else {
-          console.error("Error fetching missions:", missionsError);
-        }
-        
-        // Fetch upcoming sessions
-        const { sessions, error: sessionsError } = await getUserSessions(user.id);
-        if (!sessionsError && sessions) {
-          setUpcomingSessions(sessions);
-        } else {
-          console.error("Error fetching sessions:", sessionsError);
-        }
-        
-        // Fetch recently viewed colleges
-        const { recentColleges: colleges, error: collegesError } = await getRecentlyViewedColleges(user.id);
-        if (!collegesError && colleges) {
-          setRecentColleges(colleges);
-        } else {
-          console.error("Error fetching colleges:", collegesError);
-        }
-        
-      } catch (error) {
-        console.error("Error fetching dashboard data:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load dashboard data. Please try again.",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
   
   useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (user?.id) {
+        try {
+          setLoading(true);
+          
+          // Fetch weekly missions
+          const { missions, error: missionsError } = await getUserMissions(user.id);
+          if (!missionsError && missions) {
+            setWeeklyMissions(missions);
+          }
+          
+          // Fetch upcoming sessions
+          const { sessions, error: sessionsError } = await getUserSessions(user.id);
+          if (!sessionsError && sessions) {
+            setUpcomingSessions(sessions);
+          }
+          
+          // Fetch recently viewed colleges
+          const { recentColleges: colleges, error: collegesError } = await getRecentlyViewedColleges(user.id);
+          if (!collegesError && colleges) {
+            setRecentColleges(colleges);
+          }
+          
+        } catch (error) {
+          console.error("Error fetching dashboard data:", error);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    
     fetchDashboardData();
   }, [user?.id]);
   
@@ -94,14 +78,11 @@ const Dashboard = () => {
     });
   };
 
-  // Handle mission completion with robust error handling
+  // Handle checkbox change for weekly missions with improved error handling
   const handleMissionComplete = async (missionId: number, completed: boolean) => {
     if (!user?.id) return;
-
+    
     try {
-      // Set processing state to prevent multiple clicks
-      setProcessingMissions(prev => ({ ...prev, [missionId]: true }));
-      
       // Optimistically update UI
       setWeeklyMissions(prev => 
         prev.map(mission => 
@@ -135,9 +116,6 @@ const Dashboard = () => {
         return;
       }
       
-      // Refresh profile to get updated XP
-      await refreshProfile();
-      
       // Show toast notification
       if (completed) {
         toast({
@@ -166,9 +144,6 @@ const Dashboard = () => {
         description: "Failed to update mission status. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      // Reset processing state
-      setProcessingMissions(prev => ({ ...prev, [missionId]: false }));
     }
   };
 
@@ -177,9 +152,6 @@ const Dashboard = () => {
     if (!user?.id) return;
     
     try {
-      // Set processing state to prevent multiple clicks
-      setProcessingSessions(prev => ({ ...prev, [sessionId]: true }));
-      
       // Optimistically update UI
       setUpcomingSessions(prev => prev.filter(session => session.id !== sessionId));
       
@@ -191,7 +163,10 @@ const Dashboard = () => {
         console.error("Error cancelling session:", error);
         
         // If there's an error, refetch the sessions to restore the accurate state
-        fetchDashboardData();
+        const { sessions } = await getUserSessions(user.id);
+        if (sessions) {
+          setUpcomingSessions(sessions);
+        }
         
         toast({
           title: "Error",
@@ -215,9 +190,6 @@ const Dashboard = () => {
         description: "Failed to cancel session. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      // Reset processing state
-      setProcessingSessions(prev => ({ ...prev, [sessionId]: false }));
     }
   };
 
@@ -258,7 +230,7 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{profile?.xp || 0} XP</div>
-            <p className="text-xs text-muted-foreground">{100 - (profile?.xp % 100 || 0)} XP until next level</p>
+            <p className="text-xs text-muted-foreground">{100 - (profile?.xp % 100)} XP until next level</p>
             <Progress value={calculateLevelProgress()} className="h-2 mt-3" />
           </CardContent>
         </Card>
@@ -329,7 +301,7 @@ const Dashboard = () => {
           </CardContent>
         </Card>
         
-        {/* Weekly Missions - Completely rewritten component */}
+        {/* Weekly Missions */}
         <Card>
           <CardHeader>
             <CardTitle>Weekly Missions</CardTitle>
@@ -338,30 +310,23 @@ const Dashboard = () => {
           <CardContent className="space-y-4">
             {weeklyMissions.length > 0 ? (
               weeklyMissions.map((mission) => (
-                <div key={mission.id} className="flex items-center space-x-2 border-b border-gray-100 pb-3 last:border-none">
+                <div key={mission.id} className="flex items-center space-x-2">
                   <Checkbox
                     id={`mission-${mission.id}`}
                     checked={mission.status === 'completed'}
                     onCheckedChange={(checked) => handleMissionComplete(mission.id, checked === true)}
-                    disabled={processingMissions[mission.id]}
-                    className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
                   />
                   <div className="flex-1">
                     <label 
                       htmlFor={`mission-${mission.id}`}
-                      className={`text-sm cursor-pointer ${mission.status === 'completed' ? 'line-through text-gray-500' : ''}`}
+                      className="text-sm cursor-pointer"
                     >
                       {mission.mission_text}
                     </label>
-                    <div className="text-xs text-muted-foreground flex items-center gap-1">
-                      <span className="font-medium text-green-600">+{mission.xp} XP</span>
-                      {processingMissions[mission.id] && (
-                        <span className="inline-block animate-spin ml-2">⟳</span>
-                      )}
-                    </div>
+                    <div className="text-xs text-muted-foreground">Reward: {mission.xp} XP</div>
                   </div>
                   {mission.status === 'completed' && (
-                    <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
+                    <Badge variant="outline" className="bg-campus-success/10 text-campus-success border-campus-success">
                       Complete
                     </Badge>
                   )}
@@ -369,14 +334,6 @@ const Dashboard = () => {
               ))
             ) : (
               <p className="text-sm text-muted-foreground">No missions available this week.</p>
-            )}
-
-            {weeklyMissions.length > 0 && (
-              <div className="mt-4 pt-2 border-t border-gray-100">
-                <p className="text-xs text-muted-foreground">
-                  Missions refresh every Sunday. Complete all to earn bonus XP!
-                </p>
-              </div>
             )}
           </CardContent>
         </Card>
@@ -427,14 +384,9 @@ const Dashboard = () => {
                       size="icon"
                       className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-100"
                       onClick={() => handleCancelSession(session.id)}
-                      disabled={processingSessions[session.id]}
                       title="Cancel session"
                     >
-                      {processingSessions[session.id] ? (
-                        <span className="animate-spin">⟳</span>
-                      ) : (
-                        <X className="h-4 w-4" />
-                      )}
+                      <X className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>

@@ -1,69 +1,65 @@
 
-import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getColleges, markCollegeAsViewed } from '@/lib/supabase';
-import { College } from '@/lib/types';
-import { Eye, ExternalLink, MapPin, GraduationCap, Star, Banknote, Filter } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { Slider } from '@/components/ui/slider';
+import { ExternalLink, Search, School, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getColleges, viewCollege } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { College } from '@/lib/types';
 
 const Colleges = () => {
-  const { user } = useAuth();
   const { toast } = useToast();
-  const [colleges, setColleges] = useState<College[]>([]);
-  const [filteredColleges, setFilteredColleges] = useState<College[]>([]);
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [viewedColleges, setViewedColleges] = useState<Record<number, boolean>>({});
-  const [processingView, setProcessingView] = useState<Record<number, boolean>>({});
-  const [searchQuery, setSearchQuery] = useState('');
-
-  // Filter states
   const [filters, setFilters] = useState({
+    search: '',
     stream: '',
     state: '',
+    budget: [0, 1000000],
     rating: 0,
-    budget: [0, 2000000] as [number, number],
-    search: '',
   });
-
+  const [colleges, setColleges] = useState<College[]>([]);
+  const [streams, setStreams] = useState<string[]>([]);
+  const [states, setStates] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
-  const formatCurrency = (value: number) => {
-    return `₹${Math.round(value / 100000)} Lakh`;
-  };
-
-  // Load colleges on component mount
   useEffect(() => {
     const fetchColleges = async () => {
       setLoading(true);
+      setError(null);
+      
       try {
-        const { colleges: fetchedColleges, error } = await getColleges();
+        const { colleges: data, error: collegeError } = await getColleges();
         
-        if (error) {
-          console.error("Error fetching colleges:", error);
-          toast({
-            title: "Error",
-            description: "Failed to load colleges. Please try again.",
-            variant: "destructive",
-          });
+        if (collegeError) {
+          throw collegeError;
+        }
+        
+        if (!data || data.length === 0) {
+          setColleges([]);
+          setError("No colleges found. Please try again later.");
           return;
         }
         
-        if (fetchedColleges) {
-          setColleges(fetchedColleges);
-          setFilteredColleges(fetchedColleges);
-        }
+        console.log("Fetched colleges:", data.length);
+        setColleges(data);
+        
+        // Extract unique streams and states
+        const uniqueStreams = Array.from(new Set(data.map(college => college.stream)));
+        const uniqueStates = Array.from(new Set(data.map(college => college.state)));
+        setStreams(uniqueStreams);
+        setStates(uniqueStates);
       } catch (err) {
-        console.error("Exception in fetchColleges:", err);
+        console.error("Error fetching colleges:", err);
+        setError("Failed to fetch colleges. Please try again later.");
         toast({
           title: "Error",
-          description: "Failed to load colleges. Please try again.",
+          description: "Failed to fetch colleges. Please try again later.",
           variant: "destructive",
         });
       } finally {
@@ -72,103 +68,54 @@ const Colleges = () => {
     };
     
     fetchColleges();
-  }, []);
-
-  // Apply filters when filter state changes
-  useEffect(() => {
-    if (colleges.length === 0) return;
-    
-    const applyFilters = () => {
-      let result = [...colleges];
-      
-      // Apply stream filter
-      if (filters.stream) {
-        result = result.filter(college => college.stream === filters.stream);
-      }
-      
-      // Apply state filter
-      if (filters.state) {
-        result = result.filter(college => college.state === filters.state);
-      }
-      
-      // Apply rating filter
-      if (filters.rating > 0) {
-        result = result.filter(college => college.rating >= filters.rating);
-      }
-      
-      // Apply budget filter
-      if (filters.budget.length === 2) {
-        result = result.filter(college => 
-          college.budget_value >= filters.budget[0] && 
-          college.budget_value <= filters.budget[1]
-        );
-      }
-      
-      // Apply search query
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        result = result.filter(college => 
-          college.name.toLowerCase().includes(query) || 
-          college.location.toLowerCase().includes(query)
-        );
-      }
-      
-      setFilteredColleges(result);
-    };
-    
-    applyFilters();
-  }, [filters, searchQuery, colleges]);
-
-  // Get unique streams and states for filter dropdowns
-  const streams = [...new Set(colleges.map(college => college.stream))];
-  const states = [...new Set(colleges.map(college => college.state))];
+  }, [toast]);
   
-  // Handle mark as viewed
-  const handleMarkAsViewed = async (collegeId: number) => {
-    if (!user?.id) {
-      toast({
-        title: "Not signed in",
-        description: "Please sign in to mark colleges as viewed.",
-        variant: "destructive",
-      });
-      return;
+  // Format budget values
+  const formatBudget = (value: number) => {
+    if (value >= 100000) {
+      return `₹${(value / 100000).toFixed(1)} Lakh`;
     }
+    return `₹${value}`;
+  };
+
+  // Filter colleges based on selected filters
+  const filteredColleges = colleges.filter(college => {
+    const matchesSearch = filters.search === '' || 
+                         (college.name?.toLowerCase().includes(filters.search.toLowerCase()) || 
+                          college.location?.toLowerCase().includes(filters.search.toLowerCase()));
     
-    // Set processing state for this college
-    setProcessingView(prev => ({ ...prev, [collegeId]: true }));
+    const matchesStream = filters.stream === '' || college.stream === filters.stream;
+    const matchesState = filters.state === '' || college.state === filters.state;
+    const matchesBudget = college.budget_value >= filters.budget[0] && 
+                          college.budget_value <= filters.budget[1];
+    const matchesRating = college.rating >= filters.rating;
+
+    return matchesSearch && matchesStream && matchesState && matchesBudget && matchesRating;
+  });
+
+  // Handle applying to a college
+  const handleApplyClick = (collegeName: string, link: string) => {
+    toast({
+      title: "Application Link",
+      description: `Opening application page for ${collegeName}`,
+    });
+    
+    if (link) {
+      window.open(link, '_blank');
+    }
+  };
+
+  // Handle viewing college details
+  const handleViewCollege = async (collegeId: number) => {
+    if (!user?.id) return;
     
     try {
-      const { data, error } = await markCollegeAsViewed(user.id, collegeId);
-      
-      if (error) {
-        console.error("Error marking college as viewed:", error);
-        toast({
-          title: "Error",
-          description: "Failed to mark college as viewed. Please try again.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      // Update viewed colleges state
-      setViewedColleges(prev => ({ ...prev, [collegeId]: true }));
-      
-      // Show success message
+      await viewCollege(user.id, collegeId);
       toast({
-        title: "College marked as viewed",
-        description: "This college will appear in your recently viewed list.",
+        description: "College added to your recently viewed list",
       });
-      
-    } catch (err) {
-      console.error("Exception in handleMarkAsViewed:", err);
-      toast({
-        title: "Error",
-        description: "Failed to mark college as viewed. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      // Reset processing state
-      setProcessingView(prev => ({ ...prev, [collegeId]: false }));
+    } catch (error) {
+      console.error("Error updating recently viewed colleges:", error);
     }
   };
 
@@ -182,264 +129,229 @@ const Colleges = () => {
       </div>
     );
   }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col space-y-4">
-        <h1 className="text-3xl font-bold tracking-tight">College Explorer</h1>
-        <p className="text-muted-foreground">Discover and compare colleges based on your preferences</p>
-      </div>
-
-      {/* Search and filters */}
-      <div className="flex flex-col md:flex-row items-center gap-4">
-        <div className="relative w-full">
-          <Input
-            type="text"
-            placeholder="Search colleges by name or location..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-          </div>
-        </div>
-        <Button 
-          variant="outline" 
-          className="whitespace-nowrap"
-          onClick={() => setShowFilters(!showFilters)}
-        >
-          <Filter className="mr-2 h-4 w-4" /> {showFilters ? 'Hide Filters' : 'Show Filters'}
-        </Button>
-      </div>
-
-      {/* Filter panel */}
-      {showFilters && (
-        <div className="bg-muted/40 p-4 rounded-lg space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Stream</label>
-              <Select 
-                value={filters.stream} 
-                onValueChange={(value) => setFilters({...filters, stream: value})}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All Streams" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All Streams</SelectItem>
-                  {streams.map(stream => (
-                    <SelectItem key={stream} value={stream}>{stream}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">State</label>
-              <Select 
-                value={filters.state} 
-                onValueChange={(value) => setFilters({...filters, state: value})}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All States" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All States</SelectItem>
-                  {states.map(state => (
-                    <SelectItem key={state} value={state}>{state}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Minimum Rating</label>
-              <Select 
-                value={filters.rating.toString()} 
-                onValueChange={(value) => setFilters({...filters, rating: Number(value)})}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Any Rating" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">Any Rating</SelectItem>
-                  <SelectItem value="3">3+ Stars</SelectItem>
-                  <SelectItem value="4">4+ Stars</SelectItem>
-                  <SelectItem value="4.5">4.5+ Stars</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <label className="text-sm font-medium">Budget Range</label>
-                <span className="text-xs text-muted-foreground">
-                  {formatCurrency(filters.budget[0])} - {formatCurrency(filters.budget[1])}
-                </span>
-              </div>
-              <Slider
-                min={0}
-                max={2000000}
-                step={50000}
-                value={filters.budget}
-                onValueChange={(value) => setFilters({...filters, budget: value as [number, number]})}
-                className="py-4"
-              />
-            </div>
-          </div>
-          
-          <div className="flex justify-end space-x-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setFilters({
-                stream: '',
-                state: '',
-                rating: 0,
-                budget: [0, 2000000],
-                search: '',
-              })}
-            >
-              Clear All
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs for different college categories */}
-      <Tabs defaultValue="all" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 md:grid-cols-5 mb-4">
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="engineering">Engineering</TabsTrigger>
-          <TabsTrigger value="medical">Medical</TabsTrigger>
-          <TabsTrigger value="business">Business</TabsTrigger>
-          <TabsTrigger value="arts">Arts & Science</TabsTrigger>
-        </TabsList>
-        <TabsContent value="all" className="mt-0">
-          <CollegesList 
-            colleges={filteredColleges} 
-            viewedColleges={viewedColleges}
-            processingView={processingView}
-            onMarkAsViewed={handleMarkAsViewed}
-          />
-        </TabsContent>
-        <TabsContent value="engineering" className="mt-0">
-          <CollegesList 
-            colleges={filteredColleges.filter(college => college.stream === 'Engineering')}
-            viewedColleges={viewedColleges}
-            processingView={processingView}
-            onMarkAsViewed={handleMarkAsViewed}
-          />
-        </TabsContent>
-        <TabsContent value="medical" className="mt-0">
-          <CollegesList 
-            colleges={filteredColleges.filter(college => college.stream === 'Medical')}
-            viewedColleges={viewedColleges}
-            processingView={processingView}
-            onMarkAsViewed={handleMarkAsViewed}
-          />
-        </TabsContent>
-        <TabsContent value="business" className="mt-0">
-          <CollegesList 
-            colleges={filteredColleges.filter(college => college.stream === 'Business')}
-            viewedColleges={viewedColleges}
-            processingView={processingView}
-            onMarkAsViewed={handleMarkAsViewed}
-          />
-        </TabsContent>
-        <TabsContent value="arts" className="mt-0">
-          <CollegesList 
-            colleges={filteredColleges.filter(college => college.stream === 'Arts & Science')}
-            viewedColleges={viewedColleges}
-            processingView={processingView}
-            onMarkAsViewed={handleMarkAsViewed}
-          />
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
-};
-
-interface CollegesListProps {
-  colleges: College[];
-  viewedColleges: Record<number, boolean>;
-  processingView: Record<number, boolean>;
-  onMarkAsViewed: (collegeId: number) => void;
-}
-
-const CollegesList: React.FC<CollegesListProps> = ({ colleges, viewedColleges, processingView, onMarkAsViewed }) => {
-  if (colleges.length === 0) {
+  
+  if (error) {
     return (
-      <div className="text-center py-10">
-        <GraduationCap className="mx-auto h-12 w-12 text-muted-foreground" />
-        <h3 className="mt-4 text-lg font-semibold">No colleges found</h3>
-        <p className="mt-2 text-muted-foreground">Try adjusting your filters or search criteria.</p>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">College Explorer</h1>
+          <p className="text-muted-foreground">Find the perfect college for your future</p>
+        </div>
+        <Card className="text-center p-8">
+          <CardContent className="pt-6">
+            <p className="mb-4 text-red-500">{error}</p>
+            <Button 
+              onClick={() => window.location.reload()}
+              className="bg-campus-blue hover:bg-campus-blue/90"
+            >
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
+  // Render the colleges page with all necessary components
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {colleges.map((college) => (
-        <Card key={college.id} className="flex flex-col h-full">
-          <CardHeader className="pb-2">
-            <div className="relative w-full h-48 mb-4 rounded-md overflow-hidden bg-muted">
-              <img 
-                src={college.image_url || '/placeholder.svg'} 
-                alt={college.name}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/placeholder.svg';
-                }}
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">College Explorer</h1>
+        <p className="text-muted-foreground">Find the perfect college for your future</p>
+      </div>
+      
+      {/* Filter Section */}
+      <Card>
+        <CardHeader className="pb-0">
+          <div className="flex items-center justify-between">
+            <div className="relative lg:w-1/3">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search colleges..."
+                className="pl-8"
+                value={filters.search}
+                onChange={(e) => setFilters({...filters, search: e.target.value})}
               />
-              <Badge className="absolute top-2 right-2 bg-campus-blue">
-                {college.stream}
-              </Badge>
             </div>
-            <CardTitle className="line-clamp-2">{college.name}</CardTitle>
-            <div className="flex items-center gap-1 text-muted-foreground text-sm mt-1">
-              <MapPin className="h-4 w-4" />
-              <span>{college.location}</span>
+            <Button 
+              variant="outline" 
+              className="flex items-center gap-2"
+              onClick={() => setShowFilters(!showFilters)}
+            >
+              <Filter className="h-4 w-4" /> 
+              {showFilters ? 'Hide Filters' : 'Show Filters'}
+            </Button>
+          </div>
+        </CardHeader>
+        
+        {showFilters && (
+          <CardContent className="pt-4">
+            <div className="grid gap-4 md:grid-cols-3">
+              {/* Stream Filter */}
+              <div>
+                <label className="text-sm font-medium mb-1 block">Stream</label>
+                <Select 
+                  value={filters.stream}
+                  onValueChange={(value) => setFilters({...filters, stream: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Streams" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Streams</SelectItem>
+                    {streams.map(stream => (
+                      <SelectItem key={stream} value={stream}>{stream}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* State Filter */}
+              <div>
+                <label className="text-sm font-medium mb-1 block">State</label>
+                <Select
+                  value={filters.state}
+                  onValueChange={(value) => setFilters({...filters, state: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All States" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All States</SelectItem>
+                    {states.map(state => (
+                      <SelectItem key={state} value={state}>{state}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Rating Filter */}
+              <div>
+                <label className="text-sm font-medium mb-1 block">Rating</label>
+                <Select
+                  value={filters.rating.toString()}
+                  onValueChange={(value) => setFilters({...filters, rating: parseFloat(value)})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Any Rating" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Any Rating</SelectItem>
+                    <SelectItem value="4">4+ Stars</SelectItem>
+                    <SelectItem value="4.5">4.5+ Stars</SelectItem>
+                    <SelectItem value="4.8">4.8+ Stars</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-2 pb-2 flex-grow">
-            <div className="flex items-center gap-1">
-              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-              <span className="font-medium">{college.rating.toFixed(1)}</span>
-              <span className="text-muted-foreground text-sm">/ 5.0</span>
-            </div>
-            <div className="flex items-center gap-1 text-sm">
-              <Banknote className="h-4 w-4 text-emerald-500" />
-              <span>{college.budget_range}</span>
+            
+            {/* Budget Slider */}
+            <div className="mt-6">
+              <div className="flex justify-between mb-2">
+                <span className="text-sm font-medium">Budget Range</span>
+                <span className="text-sm text-muted-foreground">
+                  {formatBudget(filters.budget[0])} - {formatBudget(filters.budget[1])}
+                </span>
+              </div>
+              <Slider
+                defaultValue={[0, 1000000]}
+                min={0}
+                max={1000000}
+                step={50000}
+                value={filters.budget}
+                onValueChange={(value) => setFilters({...filters, budget: value})}
+                className="mt-2"
+              />
             </div>
           </CardContent>
-          <CardFooter className="flex justify-between pt-0">
-            <Button
-              variant="outline"
-              size="sm"
-              className={`gap-1 ${viewedColleges[college.id] ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : ''}`}
-              onClick={() => onMarkAsViewed(college.id)}
-              disabled={viewedColleges[college.id] || processingView[college.id]}
+        )}
+      </Card>
+      
+      {/* Results Section */}
+      {filteredColleges.length > 0 ? (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {filteredColleges.map((college) => (
+            <Card 
+              key={college.id} 
+              className="overflow-hidden hover:shadow-md transition-shadow bg-card"
+              onClick={() => handleViewCollege(college.id)}
             >
-              {processingView[college.id] ? (
-                <span className="animate-spin mr-1">⟳</span>
-              ) : (
-                <Eye className="h-4 w-4 mr-1" />
-              )}
-              {viewedColleges[college.id] ? 'Viewed' : 'Mark as viewed'}
-            </Button>
-            <Button variant="default" size="sm" asChild>
-              <a href={college.apply_link} target="_blank" rel="noopener noreferrer" className="gap-1">
-                <ExternalLink className="h-4 w-4" />
-                Apply
-              </a>
-            </Button>
-          </CardFooter>
+              <div className="h-48 bg-muted">
+                <img 
+                  src={college.image_url || '/placeholder.svg'} 
+                  alt={college.name} 
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = '/placeholder.svg';
+                  }}
+                />
+              </div>
+              <CardContent className="pt-6">
+                <h2 className="font-bold text-lg mb-1">{college.name}</h2>
+                <div className="text-sm text-muted-foreground mb-3">
+                  <div>{college.location}</div>
+                  <div>{college.stream}</div>
+                  <div>{college.budget_range}</div>
+                </div>
+                <div className="flex items-center mb-2">
+                  <div className="flex items-center">
+                    {Array(5).fill(0).map((_, index) => (
+                      <svg 
+                        key={index}
+                        className={`w-4 h-4 ${index < Math.floor(college.rating) ? "text-yellow-400" : "text-gray-300"}`}
+                        xmlns="http://www.w3.org/2000/svg" 
+                        viewBox="0 0 24 24" 
+                        fill="currentColor"
+                      >
+                        <path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clipRule="evenodd" />
+                      </svg>
+                    ))}
+                  </div>
+                  <span className="ml-2 text-sm font-medium">{college.rating}</span>
+                </div>
+              </CardContent>
+              <CardFooter className="pt-0">
+                <Button 
+                  className="w-full bg-campus-blue hover:bg-campus-blue/90"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleApplyClick(college.name, college.apply_link);
+                  }}
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Apply Now
+                </Button>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center p-8">
+            <School className="h-16 w-16 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No colleges found</h3>
+            <p className="text-muted-foreground text-center">
+              Try adjusting your filters to see more results.
+            </p>
+            {(filters.search || filters.stream || filters.state || filters.rating > 0) && (
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => setFilters({
+                  search: '',
+                  stream: '',
+                  state: '',
+                  budget: [0, 1000000],
+                  rating: 0,
+                })}
+              >
+                Reset Filters
+              </Button>
+            )}
+          </CardContent>
         </Card>
-      ))}
+      )}
     </div>
   );
 };

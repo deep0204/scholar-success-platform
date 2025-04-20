@@ -8,6 +8,7 @@ import { getLeaderboard } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 const Leaderboard = () => {
   const { toast } = useToast();
@@ -18,7 +19,8 @@ const Leaderboard = () => {
   useEffect(() => {
     const fetchLeaderboardData = async () => {
       try {
-        const { users: data, error } = await getLeaderboard();
+        setLoading(true);
+        const { users: data, error } = await getLeaderboard(50); // Get up to 50 users
         
         if (error) throw error;
         
@@ -128,7 +130,7 @@ const Leaderboard = () => {
                         </AvatarFallback>
                       </Avatar>
                     </div>
-                    <h3 className="font-bold text-lg">{user.full_name}</h3>
+                    <h3 className="font-bold text-lg">{user.full_name || 'Anonymous'}</h3>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-sm">{user.xp} XP</span>
                       <span className="text-xs text-muted-foreground">•</span>
@@ -150,21 +152,21 @@ const Leaderboard = () => {
             {/* Rest of the Users */}
             {users.length > 3 && (
               <div className="border rounded-md overflow-hidden">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-muted/50">
-                      <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Rank</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Student</th>
-                      <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">XP</th>
-                      <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">Level</th>
-                      <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground hidden md:table-cell">Badges</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16 text-center">Rank</TableHead>
+                      <TableHead>Student</TableHead>
+                      <TableHead className="text-right">XP</TableHead>
+                      <TableHead className="text-right">Level</TableHead>
+                      <TableHead className="text-right hidden md:table-cell">Badges</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {users.slice(3).map((user) => (
-                      <tr key={user.id} className={`border-t ${profile?.id === user.id ? 'bg-campus-blue/5' : ''}`}>
-                        <td className="px-4 py-3 text-sm">{user.position}</td>
-                        <td className="px-4 py-3">
+                      <TableRow key={user.id} className={profile?.id === user.id ? 'bg-campus-blue/5' : ''}>
+                        <TableCell className="text-center font-medium">{user.position}</TableCell>
+                        <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8">
                               <AvatarFallback className="text-xs bg-muted">
@@ -172,26 +174,26 @@ const Leaderboard = () => {
                               </AvatarFallback>
                             </Avatar>
                             <div className="flex flex-col">
-                              <span className="font-medium">{user.full_name}</span>
+                              <span className="font-medium">{user.full_name || 'Anonymous'}</span>
                               {profile?.id === user.id && (
                                 <span className="text-xs text-campus-blue">You</span>
                               )}
                             </div>
                           </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right">{user.xp} XP</td>
-                        <td className="px-4 py-3 text-sm text-right">{user.level}</td>
-                        <td className="px-4 py-3 text-sm text-right hidden md:table-cell">
+                        </TableCell>
+                        <TableCell className="text-right">{user.xp} XP</TableCell>
+                        <TableCell className="text-right">{user.level}</TableCell>
+                        <TableCell className="text-right hidden md:table-cell">
                           {user.badges > 0 ? (
                             <Badge className="ml-auto bg-campus-blue">{user.badges}</Badge>
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           )}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
             

@@ -42,11 +42,13 @@ const Colleges = () => {
         
         setColleges(data || []);
         
-        // Extract unique streams and states
-        const uniqueStreams = Array.from(new Set(data.map(college => college.stream)));
-        const uniqueStates = Array.from(new Set(data.map(college => college.state)));
-        setStreams(uniqueStreams);
-        setStates(uniqueStates);
+        if (data && data.length > 0) {
+          // Extract unique streams and states
+          const uniqueStreams = Array.from(new Set(data.map(college => college.stream)));
+          const uniqueStates = Array.from(new Set(data.map(college => college.state)));
+          setStreams(uniqueStreams);
+          setStates(uniqueStates);
+        }
       } catch (err) {
         console.error("Error fetching colleges:", err);
         toast({
@@ -120,6 +122,20 @@ const Colleges = () => {
 
   const isCollegeViewed = (collegeId: number) => viewedColleges.includes(collegeId);
 
+  const handleToggleFilters = () => {
+    setShowFilters(prevState => !prevState);
+  };
+
+  const handleResetFilters = () => {
+    setFilters({
+      search: '',
+      stream: '',
+      state: '',
+      budget: [0, 1000000],
+      rating: 0,
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -154,7 +170,7 @@ const Colleges = () => {
             <Button 
               variant="outline" 
               className="flex items-center gap-2"
-              onClick={() => setShowFilters(!showFilters)}
+              onClick={handleToggleFilters}
             >
               <Filter className="h-4 w-4" /> 
               {showFilters ? 'Hide Filters' : 'Show Filters'}
@@ -170,7 +186,7 @@ const Colleges = () => {
                 <label className="text-sm font-medium mb-1 block">Stream</label>
                 <Select 
                   value={filters.stream}
-                  onValueChange={(value) => setFilters({...filters, stream: value})}
+                  onValueChange={(value) => setFilters(prev => ({...prev, stream: value}))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="All Streams" />
@@ -189,7 +205,7 @@ const Colleges = () => {
                 <label className="text-sm font-medium mb-1 block">State</label>
                 <Select
                   value={filters.state}
-                  onValueChange={(value) => setFilters({...filters, state: value})}
+                  onValueChange={(value) => setFilters(prev => ({...prev, state: value}))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="All States" />
@@ -208,7 +224,7 @@ const Colleges = () => {
                 <label className="text-sm font-medium mb-1 block">Rating</label>
                 <Select
                   value={filters.rating.toString()}
-                  onValueChange={(value) => setFilters({...filters, rating: parseFloat(value)})}
+                  onValueChange={(value) => setFilters(prev => ({...prev, rating: parseFloat(value)}))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Any Rating" />
@@ -237,7 +253,7 @@ const Colleges = () => {
                 max={1000000}
                 step={50000}
                 value={filters.budget}
-                onValueChange={(value) => setFilters({...filters, budget: value})}
+                onValueChange={(value) => setFilters(prev => ({...prev, budget: value}))}
                 className="mt-2"
               />
             </div>
@@ -329,13 +345,7 @@ const Colleges = () => {
               <Button 
                 variant="outline" 
                 className="mt-4"
-                onClick={() => setFilters({
-                  search: '',
-                  stream: '',
-                  state: '',
-                  budget: [0, 1000000],
-                  rating: 0,
-                })}
+                onClick={handleResetFilters}
               >
                 Reset Filters
               </Button>

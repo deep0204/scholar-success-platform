@@ -16,10 +16,9 @@ const Colleges = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [colleges, setColleges] = useState<College[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [viewedColleges, setViewedColleges] = useState<number[]>([]);
   const [showFilters, setShowFilters] = useState(false);
-  
+
   // Filter states
   const [filters, setFilters] = useState({
     search: '',
@@ -36,20 +35,12 @@ const Colleges = () => {
   useEffect(() => {
     const fetchColleges = async () => {
       setLoading(true);
-      setError(null);
-      
       try {
-        const { colleges: data, error: collegeError } = await getColleges();
+        const { colleges: data, error } = await getColleges();
         
-        if (collegeError) throw collegeError;
+        if (error) throw error;
         
-        if (!data || data.length === 0) {
-          setColleges([]);
-          setError("No colleges found. Please try again later.");
-          return;
-        }
-        
-        setColleges(data);
+        setColleges(data || []);
         
         // Extract unique streams and states
         const uniqueStreams = Array.from(new Set(data.map(college => college.stream)));
@@ -58,7 +49,6 @@ const Colleges = () => {
         setStates(uniqueStates);
       } catch (err) {
         console.error("Error fetching colleges:", err);
-        setError("Failed to fetch colleges. Please try again later.");
         toast({
           title: "Error",
           description: "Failed to fetch colleges. Please try again later.",
@@ -137,28 +127,6 @@ const Colleges = () => {
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-campus-blue"></div>
           <p className="text-muted-foreground">Loading colleges...</p>
         </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">College Explorer</h1>
-          <p className="text-muted-foreground">Find the perfect college for your future</p>
-        </div>
-        <Card className="text-center p-8">
-          <CardContent className="pt-6">
-            <p className="mb-4 text-red-500">{error}</p>
-            <Button 
-              onClick={() => window.location.reload()}
-              className="bg-campus-blue hover:bg-campus-blue/90"
-            >
-              Try Again
-            </Button>
-          </CardContent>
-        </Card>
       </div>
     );
   }

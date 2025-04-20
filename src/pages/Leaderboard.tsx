@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -6,6 +7,7 @@ import Trophy from '@/components/ui/trophy';
 import { getLeaderboard } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const Leaderboard = () => {
   const { toast } = useToast();
@@ -20,7 +22,7 @@ const Leaderboard = () => {
         
         if (error) throw error;
         
-        // Transform the data to include position and badges (mocked for now)
+        // Users are already sorted by XP in descending order from the backend
         const transformedData = data.map((user, index) => ({
           ...user,
           position: index + 1,
@@ -44,7 +46,7 @@ const Leaderboard = () => {
   }, [toast]);
 
   // Get initials from name
-  const getInitials = (name: string = '') => {
+  const getInitials = (name = '') => {
     return name
       .split(' ')
       .map(part => part[0])
@@ -53,7 +55,7 @@ const Leaderboard = () => {
   };
 
   // Get trophy type based on position
-  const getTrophyType = (position: number) => {
+  const getTrophyType = (position) => {
     if (position === 1) return 'gold';
     if (position === 2) return 'silver';
     if (position === 3) return 'bronze';
@@ -61,7 +63,29 @@ const Leaderboard = () => {
   };
   
   if (loading) {
-    return <div className="p-4">Loading leaderboard...</div>;
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Leaderboard</h1>
+          <p className="text-muted-foreground">Loading rankings...</p>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center space-x-4">
+                  <Skeleton className="h-12 w-12 rounded-full" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-[200px]" />
+                    <Skeleton className="h-4 w-[100px]" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (

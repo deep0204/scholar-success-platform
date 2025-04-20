@@ -15,6 +15,12 @@ const Colleges = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [colleges, setColleges] = useState<College[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [viewedColleges, setViewedColleges] = useState<number[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Filter states
   const [filters, setFilters] = useState({
     search: '',
     stream: '',
@@ -22,12 +28,10 @@ const Colleges = () => {
     budget: [0, 1000000],
     rating: 0,
   });
-  const [colleges, setColleges] = useState<College[]>([]);
+
+  // Derived states for unique values
   const [streams, setStreams] = useState<string[]>([]);
   const [states, setStates] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
-  const [viewedColleges, setViewedColleges] = useState<number[]>([]);
 
   useEffect(() => {
     const fetchColleges = async () => {
@@ -37,9 +41,7 @@ const Colleges = () => {
       try {
         const { colleges: data, error: collegeError } = await getColleges();
         
-        if (collegeError) {
-          throw collegeError;
-        }
+        if (collegeError) throw collegeError;
         
         if (!data || data.length === 0) {
           setColleges([]);
@@ -47,7 +49,6 @@ const Colleges = () => {
           return;
         }
         
-        console.log("Fetched colleges:", data.length);
         setColleges(data);
         
         // Extract unique streams and states
@@ -70,8 +71,8 @@ const Colleges = () => {
     
     fetchColleges();
   }, [toast]);
-  
-  // Format budget values
+
+  // Format budget values for display
   const formatBudget = (value: number) => {
     if (value >= 100000) {
       return `₹${(value / 100000).toFixed(1)} Lakh`;
@@ -82,29 +83,17 @@ const Colleges = () => {
   // Filter colleges based on selected filters
   const filteredColleges = colleges.filter(college => {
     const matchesSearch = filters.search === '' || 
-                         (college.name?.toLowerCase().includes(filters.search.toLowerCase()) || 
-                          college.location?.toLowerCase().includes(filters.search.toLowerCase()));
+                         college.name.toLowerCase().includes(filters.search.toLowerCase()) || 
+                         college.location.toLowerCase().includes(filters.search.toLowerCase());
     
     const matchesStream = filters.stream === '' || college.stream === filters.stream;
     const matchesState = filters.state === '' || college.state === filters.state;
     const matchesBudget = college.budget_value >= filters.budget[0] && 
-                          college.budget_value <= filters.budget[1];
+                         college.budget_value <= filters.budget[1];
     const matchesRating = college.rating >= filters.rating;
 
     return matchesSearch && matchesStream && matchesState && matchesBudget && matchesRating;
   });
-
-  // Handle applying to a college
-  const handleApplyClick = (collegeName: string, link: string) => {
-    toast({
-      title: "Application Link",
-      description: `Opening application page for ${collegeName}`,
-    });
-    
-    if (link) {
-      window.open(link, '_blank');
-    }
-  };
 
   // Handle viewing college details
   const handleViewCollege = async (collegeId: number) => {
@@ -112,8 +101,6 @@ const Colleges = () => {
     
     try {
       await viewCollege(user.id, collegeId);
-      
-      // Update local state to reflect viewed status
       setViewedColleges(prev => [...prev, collegeId]);
       
       toast({
@@ -129,9 +116,19 @@ const Colleges = () => {
     }
   };
 
-  const isCollegeViewed = (collegeId: number) => {
-    return viewedColleges.includes(collegeId);
+  // Handle applying to a college
+  const handleApplyClick = (collegeName: string, link: string) => {
+    toast({
+      title: "Application Link",
+      description: `Opening application page for ${collegeName}`,
+    });
+    
+    if (link) {
+      window.open(link, '_blank');
+    }
   };
+
+  const isCollegeViewed = (collegeId: number) => viewedColleges.includes(collegeId);
 
   if (loading) {
     return (
@@ -143,7 +140,7 @@ const Colleges = () => {
       </div>
     );
   }
-  
+
   if (error) {
     return (
       <div className="space-y-6">
@@ -166,7 +163,6 @@ const Colleges = () => {
     );
   }
 
-  // Render the colleges page with all necessary components
   return (
     <div className="space-y-6 animate-fade-in">
       <div>

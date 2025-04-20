@@ -100,37 +100,32 @@ export const signIn = async (email: string, password: string) => {
 };
 
 export const signUp = async (email: string, password: string, userData: any) => {
-  // Register the user
-  const { data: authData, error: authError } = await supabase.auth.signUp({
-    email,
-    password,
-  });
-  
-  if (authError) return { data: null, error: authError };
-  
-  // If registration successful, add user data to the users table
-  if (authData.user) {
-    const { error: profileError } = await supabase
-      .from('users')
-      .insert({
-        id: authData.user.id,
-        email: email,
-        full_name: userData.full_name,
-        gender: userData.gender,
-        age: userData.age,
-        phone: userData.phone,
-        education_background: userData.education_background,
-        percentage: userData.percentage,
-        stream: userData.stream,
-        preferred_states: userData.preferred_states,
-        xp: 0,
-        level: 1,
-      });
+  try {
+    // Register the user with metadata included
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: userData.full_name,
+          gender: userData.gender,
+          age: userData.age,
+          phone: userData.phone,
+          education_background: userData.education_background,
+          percentage: userData.percentage,
+          stream: userData.stream,
+          preferred_states: userData.preferred_states,
+        }
+      }
+    });
+
+    if (authError) throw authError;
     
-    if (profileError) return { data: null, error: profileError };
+    return { data: authData, error: null };
+  } catch (error) {
+    console.error("Error in signUp:", error);
+    return { data: null, error };
   }
-  
-  return { data: authData, error: null };
 };
 
 export const signOut = async () => {

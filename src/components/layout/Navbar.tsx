@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Bell, User } from 'lucide-react';
+import { User, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -8,11 +8,14 @@ import { useNavigate } from 'react-router-dom';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Toggle } from '@/components/ui/toggle';
 
 const Navbar = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { profile, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   
   // Get initials from full name
   const getInitials = (name: string = 'User') => {
@@ -42,10 +45,17 @@ const Navbar = () => {
           </div>
         </div>
         
-        <Button size="icon" variant="ghost" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-campus-pink"></span>
-        </Button>
+        <Toggle 
+          aria-label="Toggle theme" 
+          pressed={theme === 'dark'} 
+          onPressedChange={toggleTheme}
+        >
+          {theme === 'dark' ? (
+            <Moon className="h-5 w-5" />
+          ) : (
+            <Sun className="h-5 w-5" />
+          )}
+        </Toggle>
         
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

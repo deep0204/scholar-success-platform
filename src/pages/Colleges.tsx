@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { ExternalLink, Search, School, Filter } from 'lucide-react';
+import { ExternalLink, Search, School, Filter, Eye, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getColleges, viewCollege } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,6 +27,7 @@ const Colleges = () => {
   const [states, setStates] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [viewedColleges, setViewedColleges] = useState<number[]>([]);
 
   useEffect(() => {
     const fetchColleges = async () => {
@@ -111,12 +112,25 @@ const Colleges = () => {
     
     try {
       await viewCollege(user.id, collegeId);
+      
+      // Update local state to reflect viewed status
+      setViewedColleges(prev => [...prev, collegeId]);
+      
       toast({
         description: "College added to your recently viewed list",
       });
     } catch (error) {
       console.error("Error updating recently viewed colleges:", error);
+      toast({
+        title: "Error",
+        description: "Failed to mark college as viewed. Please try again.",
+        variant: "destructive",
+      });
     }
+  };
+
+  const isCollegeViewed = (collegeId: number) => {
+    return viewedColleges.includes(collegeId);
   };
 
   if (loading) {
@@ -274,9 +288,8 @@ const Colleges = () => {
             <Card 
               key={college.id} 
               className="overflow-hidden hover:shadow-md transition-shadow bg-card"
-              onClick={() => handleViewCollege(college.id)}
             >
-              <div className="h-48 bg-muted">
+              <div className="h-48 bg-muted relative">
                 <img 
                   src={college.image_url || '/placeholder.svg'} 
                   alt={college.name} 
@@ -286,6 +299,23 @@ const Colleges = () => {
                     target.src = '/placeholder.svg';
                   }}
                 />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className={`absolute top-2 right-2 ${isCollegeViewed(college.id) ? 'bg-green-500 text-white hover:bg-green-600' : ''}`}
+                  onClick={() => handleViewCollege(college.id)}
+                  disabled={isCollegeViewed(college.id)}
+                >
+                  {isCollegeViewed(college.id) ? (
+                    <>
+                      <Check className="mr-1 h-4 w-4" /> Viewed
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="mr-1 h-4 w-4" /> Mark as Viewed
+                    </>
+                  )}
+                </Button>
               </div>
               <CardContent className="pt-6">
                 <h2 className="font-bold text-lg mb-1">{college.name}</h2>
@@ -314,10 +344,7 @@ const Colleges = () => {
               <CardFooter className="pt-0">
                 <Button 
                   className="w-full bg-campus-blue hover:bg-campus-blue/90"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleApplyClick(college.name, college.apply_link);
-                  }}
+                  onClick={() => handleApplyClick(college.name, college.apply_link)}
                 >
                   <ExternalLink className="mr-2 h-4 w-4" />
                   Apply Now

@@ -677,3 +677,24 @@ export const getRecentlyViewedColleges = async (userId: string) => {
     return { recentColleges: [], error: err };
   }
 };
+
+// Update user profile
+export const updateUserProfile = async (userId: string, userData: any) => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .update(userData)
+      .eq('id', userId)
+      .select();
+    
+    if (error) {
+      console.error("Error updating user profile:", error.message);
+      throw error;
+    }
+    
+    return { data, error: null };
+  } catch (err) {
+    console.error("Exception in updateUserProfile:", err);
+    return { data: null, error: err };
+  }
+};
